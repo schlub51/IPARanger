@@ -8,7 +8,7 @@ The original app downloads encrypted IPA files from the App Store using an Apple
 
 ## Compatibility / support disclaimer
 
-This fork was tested on my own device and setup only. I used it on a rootless jailbreak environment, and I cannot guarantee that it will behave the same way on other iOS versions, other jailbreaks, rootful setups, or TrollStore-only setups.
+This fork was tested on my own device and setup only. I used it on a rootless jailbreak environment (Dopamine, iOS 16.4), and I cannot guarantee that it will behave the same way on other iOS versions, other jailbreaks, or rootful setups.
 
 Some parts may fail, behave differently, or crash entirely depending on your environment. This is shared as an experimental fork, not as a polished or officially supported release.
 
@@ -40,9 +40,7 @@ If it works for you, nice. If it does not, please assume rough edges are expecte
   <img src="docs/screenshots/accounts-switcher.png" alt="Multi-account switcher" width="240">
 </p>
 
-## Notes
-
-This fork was built through experimentation and testing on my own setup. It may have rough edges.
+## Notes on downloaded IPAs
 
 Downloaded IPAs are still encrypted when they come from the App Store. TrollStore cannot install encrypted main binaries directly; that is separate from IPARanger's download flow.
 
