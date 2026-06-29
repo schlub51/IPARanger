@@ -6,6 +6,14 @@ I made these changes mostly for personal use and experimentation. If they help s
 
 The original app downloads encrypted IPA files from the App Store using an Apple ID account, through [majd/ipatool](https://github.com/majd/ipatool).
 
+## Compatibility / support disclaimer
+
+This fork was tested on my own device and setup only. I used it on a rootless jailbreak environment, and I cannot guarantee that it will behave the same way on other iOS versions, other jailbreaks, rootful setups, or TrollStore-only setups.
+
+Some parts may fail, behave differently, or crash entirely depending on your environment. This is shared as an experimental fork, not as a polished or officially supported release.
+
+If it works for you, nice. If it does not, please assume rough edges are expected.
+
 ## What changed in this fork
 
 - Added multi-account support.
@@ -34,7 +42,7 @@ The original app downloads encrypted IPA files from the App Store using an Apple
 
 ## Notes
 
-This fork was built through experimentation and testing on my own setup. It may have rough edges, and I cannot guarantee that every feature works on every jailbreak, rootless, or TrollStore configuration.
+This fork was built through experimentation and testing on my own setup. It may have rough edges.
 
 Downloaded IPAs are still encrypted when they come from the App Store. TrollStore cannot install encrypted main binaries directly; that is separate from IPARanger's download flow.
 
