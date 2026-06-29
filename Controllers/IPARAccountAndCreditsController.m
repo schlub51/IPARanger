@@ -1,5 +1,7 @@
 #import "IPARAccountAndCreditsController.h"
 #import "IPARLoginScreenViewController.h"
+#import "IPARSearchViewController.h"
+#import "IPARDownloadViewController.h"
 #import "../Extensions/IPARConstants.h"
 #import "../Utils/IPARUtils.h"
 
@@ -7,6 +9,8 @@
 @interface IPARAccountAndCredits ()
 @property (nonatomic) UILabel *searchCountryLabel;
 @property (nonatomic) UILabel *downloadCountryLabel;
+@property (nonatomic) UILabel *accountNameLabel;
+@property (nonatomic) UILabel *emailLabel;
 @end
 
 @implementation IPARAccountAndCredits
@@ -36,14 +40,23 @@
     UIImageView *headerImageView = [self setupHeaderImage];
     [contentView addSubview:headerImageView];
 
-    UILabel *accountNameLabel = [self createLabelWithText:[IPARUtils getKeyFromFile:kAccountNameKeyFromFile defaultValueIfNil:kUnknownValue] fontSize:17.0];
+    NSDictionary *activeAccount = [IPARUtils activeAccount];
+    self.accountNameLabel = [self createLabelWithText:activeAccount[kAccountNameKeyFromFile] ?: [IPARUtils getKeyFromFile:kAccountNameKeyFromFile defaultValueIfNil:kUnknownValue] fontSize:17.0];
+    UILabel *accountNameLabel = self.accountNameLabel;
     [contentView addSubview:accountNameLabel];
 
-    UILabel *emailLabel = [self createLabelWithText:[IPARUtils getKeyFromFile:kAccountEmailKeyFromFile defaultValueIfNil:kUnknownValue] fontSize:17.0];
+    self.emailLabel = [self createLabelWithText:activeAccount[kAccountEmailKeyFromFile] ?: [IPARUtils getKeyFromFile:kAccountEmailKeyFromFile defaultValueIfNil:kUnknownValue] fontSize:17.0];
+    UILabel *emailLabel = self.emailLabel;
     [contentView addSubview:emailLabel];
 
     UIButton *logoutButton = [self setupLogoutButton];
     [contentView addSubview:logoutButton];
+
+    UIButton *addAccountButton = [self setupAccountButtonWithTitle:@"Add Account" selector:@selector(handleAddAccount)];
+    [contentView addSubview:addAccountButton];
+
+    UIButton *switchAccountButton = [self setupAccountButtonWithTitle:@"Switch Account" selector:@selector(handleSwitchAccount)];
+    [contentView addSubview:switchAccountButton];
 
     NSString *formattedDate = [self setupDateFomatter];
     UILabel *lastLoginDate = [self createLabelWithText:[NSString stringWithFormat:@"Login Date: %@", formattedDate] fontSize:17.0];
@@ -81,6 +94,8 @@
     accountNameLabel.translatesAutoresizingMaskIntoConstraints = NO;
     emailLabel.translatesAutoresizingMaskIntoConstraints = NO;
     logoutButton.translatesAutoresizingMaskIntoConstraints = NO;
+    addAccountButton.translatesAutoresizingMaskIntoConstraints = NO;
+    switchAccountButton.translatesAutoresizingMaskIntoConstraints = NO;
     lastLoginDate.translatesAutoresizingMaskIntoConstraints = NO;
     self.searchCountryLabel.translatesAutoresizingMaskIntoConstraints = NO;
     self.downloadCountryLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -112,9 +127,19 @@
         [logoutButton.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor constant:20],
         [logoutButton.trailingAnchor constraintEqualToAnchor:contentView.trailingAnchor constant:-20],
         [logoutButton.heightAnchor constraintEqualToConstant:50],
+
+        [addAccountButton.topAnchor constraintEqualToAnchor:logoutButton.bottomAnchor constant:14],
+        [addAccountButton.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor constant:20],
+        [addAccountButton.trailingAnchor constraintEqualToAnchor:contentView.trailingAnchor constant:-20],
+        [addAccountButton.heightAnchor constraintEqualToConstant:44],
+
+        [switchAccountButton.topAnchor constraintEqualToAnchor:addAccountButton.bottomAnchor constant:10],
+        [switchAccountButton.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor constant:20],
+        [switchAccountButton.trailingAnchor constraintEqualToAnchor:contentView.trailingAnchor constant:-20],
+        [switchAccountButton.heightAnchor constraintEqualToConstant:44],
         
         // Info labels constraints
-        [lastLoginDate.topAnchor constraintEqualToAnchor:logoutButton.bottomAnchor constant:24],
+        [lastLoginDate.topAnchor constraintEqualToAnchor:switchAccountButton.bottomAnchor constant:24],
         [lastLoginDate.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor constant:16],
         
         [self.searchCountryLabel.topAnchor constraintEqualToAnchor:lastLoginDate.bottomAnchor constant:16],
@@ -194,7 +219,7 @@
 
 - (UIButton *)setupLogoutButton {
     UIButton *logoutButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    [logoutButton setTitle:kLogoutTitle forState:UIControlStateNormal];
+    [logoutButton setTitle:@"Logout from This Account" forState:UIControlStateNormal];
     [logoutButton.titleLabel setFont:[UIFont systemFontOfSize:18.0 weight:UIFontWeightSemibold]];
     [logoutButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     [logoutButton setTitleColor:[UIColor colorWithWhite:0.8 alpha:1.0] forState:UIControlStateHighlighted];
@@ -233,6 +258,16 @@
 
     [logoutButton addTarget:self action:@selector(handleLogout) forControlEvents:UIControlEventTouchUpInside];
     return logoutButton;
+}
+
+- (UIButton *)setupAccountButtonWithTitle:(NSString *)title selector:(SEL)selector {
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+    [button setTitle:title forState:UIControlStateNormal];
+    [button.titleLabel setFont:[UIFont systemFontOfSize:17.0 weight:UIFontWeightSemibold]];
+    [button setTitleColor:[UIColor systemBlueColor] forState:UIControlStateNormal];
+    button.backgroundColor = [UIColor clearColor];
+    [button addTarget:self action:selector forControlEvents:UIControlEventTouchUpInside];
+    return button;
 }
 
 - (UIImageView *)setupHeaderImage {
@@ -292,27 +327,71 @@
 
 - (void)handleLogout {
     AlertActionBlockWithTextField alertBlockConfirm = ^(UITextField *textField) {
-        IPARLoginScreenViewController *loginScreenVC = [[IPARLoginScreenViewController alloc] init]; 
-        // Step 1: Pop all view controllers from the navigation stack
-        [self.navigationController popToRootViewControllerAnimated:NO];
-        // Step 2: Remove the tabbarcontroller from the window's rootViewController
-        [self.tabBarController.view removeFromSuperview];
-        // Step 3: Instantiate your login screen view controller and set it as the new rootViewController of the window
-        UINavigationController *navController = [[UINavigationController alloc] initWithRootViewController:loginScreenVC];
-        UIWindow *window = UIApplication.sharedApplication.delegate.window;
-        window.rootViewController = navController;
+        NSString *accountId = [IPARUtils activeAccountId];
         NSString *commandToExecute = [NSString stringWithFormat:kLogoutCommand, kIpatoolScriptPath];
-        NSDictionary *lastCommandResult = [IPARUtils executeCommandAndGetJSON:kLaunchPathBash arg1:kBashCommandKey arg2:commandToExecute arg3:nil];
+        NSDictionary *lastCommandResult = [IPARUtils executeCommandAndGetJSON:kLaunchPathBash arg1:kBashCommandKey arg2:commandToExecute arg3:nil accountId:accountId];
         if ([lastCommandResult[kJsonLevel] isEqualToString:kJsonLevelError]) {
-            [self dismissViewControllerAnimated:YES completion:^{
-                [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:lastCommandResult[kJsonLevelError] hasTextfield:NO withTextfieldBlock:nil
-                            alertConfirmationBlock:nil withConfirmText:@"Continue anyway" alertCancelBlock:nil withCancelText:nil presentOn:loginScreenVC];
-            }]; 
+            [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:lastCommandResult[kJsonLevelError] hasTextfield:NO withTextfieldBlock:nil
+                        alertConfirmationBlock:nil withConfirmText:@"Continue anyway" alertCancelBlock:nil withCancelText:nil presentOn:self];
         }
-        [IPARUtils accountDetailsToFile:@"" authName:@"" authenticated:@"NO"];  
+        [IPARUtils deleteAccountWithId:accountId];
+        if ([IPARUtils accounts].count > 0) {
+            [self resetToTabs];
+        } else {
+            [self resetToLogin];
+        }
     };
-    [IPARUtils presentDialogWithTitle:kIPARangerLogouHeadline message:@"You are about to perform logout\nAre you sure?" hasTextfield:NO withTextfieldBlock:nil
+    [IPARUtils presentDialogWithTitle:kIPARangerLogouHeadline message:@"This will revoke the local token for this account and remove it from IPARanger." hasTextfield:NO withTextfieldBlock:nil
                             alertConfirmationBlock:alertBlockConfirm withConfirmText:@"Yes" alertCancelBlock:nil withCancelText:@"No" presentOn:self];
 }
-@end
 
+- (void)handleAddAccount {
+    [self resetToLogin];
+}
+
+- (void)handleSwitchAccount {
+    NSArray *accounts = [IPARUtils accounts];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Switch Account" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    for (NSDictionary *account in accounts) {
+        NSString *accountId = account[kAccountIdKey];
+        NSString *title = account[kAccountEmailKeyFromFile] ?: account[kAccountLabelKey] ?: accountId;
+        [alert addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [IPARUtils activateAccountWithId:accountId];
+            [self resetToTabs];
+        }]];
+    }
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
+        alert.popoverPresentationController.sourceView = self.view;
+        alert.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2.0, self.view.bounds.size.height / 2.0, 0, 0);
+        alert.popoverPresentationController.permittedArrowDirections = 0;
+    }
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)resetToLogin {
+    IPARLoginScreenViewController *loginScreenVC = [[IPARLoginScreenViewController alloc] init];
+    [self.navigationController popToRootViewControllerAnimated:NO];
+    [self.tabBarController.view removeFromSuperview];
+    UINavigationController *navController = [[UINavigationController alloc] initWithRootViewController:loginScreenVC];
+    UIWindow *window = UIApplication.sharedApplication.delegate.window;
+    window.rootViewController = navController;
+}
+
+- (void)resetToTabs {
+    IPARSearchViewController *searchVC = [[IPARSearchViewController alloc] init];
+    UINavigationController *searchNC = [[UINavigationController alloc] initWithRootViewController:searchVC];
+
+    IPARDownloadViewController *downloadVC = [[IPARDownloadViewController alloc] init];
+    UINavigationController *downloadNC = [[UINavigationController alloc] initWithRootViewController:downloadVC];
+
+    IPARAccountAndCredits *accountVC = [[IPARAccountAndCredits alloc] init];
+    UINavigationController *accountNC = [[UINavigationController alloc] initWithRootViewController:accountVC];
+
+    UITabBarController *tabBarController = [[UITabBarController alloc] init];
+    tabBarController.viewControllers = @[searchNC, downloadNC, accountNC];
+
+    UIWindow *window = UIApplication.sharedApplication.delegate.window;
+    window.rootViewController = tabBarController;
+}
+@end

@@ -24,6 +24,7 @@ typedef void (^AlertTextFieldBlock)(UITextField *);
 
 @interface IPARUtils : NSObject
 + (NSDictionary *)executeCommandAndGetJSON:(NSString *)launchPath arg1:(NSString *)arg1 arg2:(NSString *)arg2 arg3:(NSString *)arg3;
++ (NSDictionary *)executeCommandAndGetJSON:(NSString *)launchPath arg1:(NSString *)arg1 arg2:(NSString *)arg2 arg3:(NSString *)arg3 accountId:(NSString *)accountId;
 + (NSDictionary<NSString*,NSArray*> *)setupTaskAndPipesWithCommand:(NSString *)command;
 + (NSDictionary<NSString*,NSArray*> *)setupTaskAndPipesWithCommandposix:(NSString *)launchPath arg1:(NSString *)arg1 
   arg2:(NSString *)arg2 arg3:(NSString *)arg3;
@@ -32,6 +33,18 @@ typedef void (^AlertTextFieldBlock)(UITextField *);
 + (id)getKeyFromFile:(NSString *)key defaultValueIfNil:(NSString *)defaultValue;
 + (void)saveKeyToFile:(NSString *)key withValue:(NSString *)value;
 + (void)accountDetailsToFile:(NSString *)userEmail authName:(NSString *)authName authenticated:(NSString *)authenticated;
++ (NSArray<NSDictionary *> *)accounts;
++ (NSDictionary *)activeAccount;
++ (NSString *)activeAccountId;
++ (NSString *)activeAccountHomePath;
++ (NSString *)beginPendingAccountHomePath;
++ (NSString *)pendingAccountId;
++ (void)cancelPendingAccount;
++ (void)activateAccountWithId:(NSString *)accountId;
++ (void)addOrUpdateAccountWithEmail:(NSString *)email authName:(NSString *)authName storefront:(NSString *)storefront accountId:(NSString *)accountId;
++ (void)deleteAccountWithId:(NSString *)accountId;
++ (NSString *)downloadedAccountEmailForFileName:(NSString *)fileName;
++ (void)saveDownloadedAccountEmail:(NSString *)email forFileName:(NSString *)fileName;
 + (NSString *)emojiFlagForISOCountryCode:(NSString *)countryCode;
 + (void)getAppIconFromApple:(NSString *)bundleId completion:(void (^)(UIImage *appIcon))completion;
 + (NSString *)humanReadableSizeForBytes:(long long)bytes;
@@ -51,4 +64,3 @@ typedef void (^AlertTextFieldBlock)(UITextField *);
 + (unsigned long long)calculateFolderSize:(NSString *)folderPath;
 + (void)openGithub;
 @end
-

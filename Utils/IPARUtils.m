@@ -10,9 +10,14 @@
 
 // global variable to store the pid of the spawned process
 int spawnedProcessPid;
+static NSString *pendingLoginAccountId;
 
 @implementation IPARUtils
 + (NSDictionary *)executeCommandAndGetJSON:(NSString *)launchPath arg1:(NSString *)arg1 arg2:(NSString *)arg2 arg3:(NSString *)arg3 {
+    return [self executeCommandAndGetJSON:launchPath arg1:arg1 arg2:arg2 arg3:arg3 accountId:nil];
+}
+
++ (NSDictionary *)executeCommandAndGetJSON:(NSString *)launchPath arg1:(NSString *)arg1 arg2:(NSString *)arg2 arg3:(NSString *)arg3 accountId:(NSString *)accountId {
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSString *launchPathValidated = kLaunchPathBash;
     #ifndef THEOS_PACKAGE_SCHEME_rootless
@@ -55,9 +60,18 @@ int spawnedProcessPid;
     pid_t pid;
     const char *argv[] = { [launchPathValidated UTF8String], [arg1 UTF8String], 
                           [arg2 UTF8String], [arg3 UTF8String], NULL };
+    NSString *homePath = accountId.length > 0 ? [self accountHomePathForId:accountId] : [self activeAccountHomePath];
+    NSString *tmpPath = [homePath stringByAppendingPathComponent:@"tmp"];
+    [fileManager createDirectoryAtPath:tmpPath withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *homeEnv = [NSString stringWithFormat:@"HOME=%@", homePath];
+    NSString *tmpEnv = [NSString stringWithFormat:@"TMPDIR=%@", tmpPath];
+    NSString *serviceEnv = [NSString stringWithFormat:@"IPATOOL_KEYCHAIN_SERVICE=%@", [self keychainServiceForAccountId:accountId]];
+    NSString *pathEnv = @"PATH=/var/jb/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+    NSString *langEnv = @"LANG=en_US.UTF-8";
+    char *envp[] = { (char *)[homeEnv UTF8String], (char *)[tmpEnv UTF8String], (char *)[pathEnv UTF8String], (char *)[langEnv UTF8String], (char *)[serviceEnv UTF8String], NULL };
     
     int spawnError = posix_spawn(&pid, [launchPathValidated UTF8String], &actions, NULL, 
-                                (char* const*)argv, NULL);
+                                (char* const*)argv, envp);
     posix_spawn_file_actions_destroy(&actions);
     
     if (spawnError != 0) {
@@ -100,6 +114,289 @@ int spawnedProcessPid;
     }
 
     return jsonResult;
+}
+
++ (NSMutableDictionary *)settingsDictionary {
+    NSMutableDictionary *settings = [NSMutableDictionary dictionary];
+    [settings addEntriesFromDictionary:[NSDictionary dictionaryWithContentsOfFile:kIPARangerSettingsDict]];
+    return settings;
+}
+
++ (void)writeSettingsDictionary:(NSDictionary *)settings {
+    [settings writeToFile:kIPARangerSettingsDict atomically:YES];
+}
+
++ (NSString *)safeAccountIdFromString:(NSString *)string {
+    NSString *source = string.length > 0 ? string : [[NSUUID UUID] UUIDString];
+    NSCharacterSet *allowed = [NSCharacterSet characterSetWithCharactersInString:@"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"];
+    NSMutableString *safe = [NSMutableString string];
+    for (NSUInteger i = 0; i < source.length; i++) {
+        unichar c = [source characterAtIndex:i];
+        if ([allowed characterIsMember:c]) {
+            [safe appendFormat:@"%C", c];
+        }
+    }
+    if (safe.length == 0) {
+        [safe appendString:[[NSUUID UUID] UUIDString]];
+    }
+    return safe;
+}
+
++ (NSString *)accountHomePathForId:(NSString *)accountId {
+    NSString *safeId = [self safeAccountIdFromString:accountId];
+    return [[kIPARangerDocumentsPath stringByAppendingPathComponent:@"accounts"] stringByAppendingPathComponent:safeId];
+}
+
++ (NSDictionary *)legacyAccountFromSettings:(NSDictionary *)settings {
+    NSString *authenticated = settings[kAuthenticatedKeyFromFile];
+    if (![authenticated isEqualToString:@"YES"]) {
+        return nil;
+    }
+    NSString *accountId = @"legacy";
+    NSString *email = settings[kAccountEmailKeyFromFile] ?: kUnknownValue;
+    NSString *name = settings[kAccountNameKeyFromFile] ?: email;
+    NSString *storefront = settings[kCountryDownloadKeyFromFile] ?: kDefaultInitialCountry;
+    return @{
+        kAccountIdKey: accountId,
+        kAccountLabelKey: name,
+        kAccountEmailKeyFromFile: email,
+        kAccountNameKeyFromFile: name,
+        kAccountHomeKey: [self accountHomePathForId:accountId],
+        kAccountStorefrontKey: storefront,
+        kAccountKeychainServiceKey: kDefaultIpatoolKeychainService
+    };
+}
+
++ (void)ensureAccountDirectory:(NSDictionary *)account {
+    NSString *home = account[kAccountHomeKey];
+    if (home.length > 0) {
+        [[NSFileManager defaultManager] createDirectoryAtPath:[home stringByAppendingPathComponent:@"tmp"] withIntermediateDirectories:YES attributes:nil error:nil];
+    }
+}
+
++ (NSArray<NSDictionary *> *)accounts {
+    NSMutableDictionary *settings = [self settingsDictionary];
+    NSArray *storedAccounts = settings[kAccountsKeyFromFile];
+    NSMutableArray *accounts = [NSMutableArray array];
+    if ([storedAccounts isKindOfClass:[NSArray class]]) {
+        for (NSDictionary *account in storedAccounts) {
+            if (![account isKindOfClass:[NSDictionary class]]) {
+                continue;
+            }
+            NSMutableDictionary *normalized = [account mutableCopy];
+            NSString *accountId = normalized[kAccountIdKey];
+            if (accountId.length == 0) {
+                accountId = [self safeAccountIdFromString:normalized[kAccountEmailKeyFromFile]];
+                normalized[kAccountIdKey] = accountId;
+            }
+            if (![normalized[kAccountHomeKey] length]) {
+                normalized[kAccountHomeKey] = [self accountHomePathForId:accountId];
+            }
+            if (![normalized[kAccountKeychainServiceKey] length]) {
+                normalized[kAccountKeychainServiceKey] = [accountId isEqualToString:@"legacy"] ? kDefaultIpatoolKeychainService : [NSString stringWithFormat:@"ipatool-auth-%@", accountId];
+            }
+            [self ensureAccountDirectory:normalized];
+            [accounts addObject:normalized];
+        }
+    }
+    if (accounts.count == 0) {
+        NSDictionary *legacyAccount = [self legacyAccountFromSettings:settings];
+        if (legacyAccount) {
+            [self ensureAccountDirectory:legacyAccount];
+            [accounts addObject:legacyAccount];
+            settings[kAccountsKeyFromFile] = accounts;
+            settings[kActiveAccountIdKeyFromFile] = legacyAccount[kAccountIdKey];
+            [self writeSettingsDictionary:settings];
+        }
+    }
+    return accounts;
+}
+
++ (NSDictionary *)accountForId:(NSString *)accountId {
+    for (NSDictionary *account in [self accounts]) {
+        if ([account[kAccountIdKey] isEqualToString:accountId]) {
+            return account;
+        }
+    }
+    return nil;
+}
+
++ (NSDictionary *)activeAccount {
+    NSMutableDictionary *settings = [self settingsDictionary];
+    NSArray *accounts = [self accounts];
+    NSString *activeId = settings[kActiveAccountIdKeyFromFile];
+    NSDictionary *active = [self accountForId:activeId];
+    if (!active && accounts.count > 0) {
+        active = accounts.firstObject;
+        settings[kActiveAccountIdKeyFromFile] = active[kAccountIdKey];
+        settings[kAuthenticatedKeyFromFile] = @"YES";
+        settings[kAccountEmailKeyFromFile] = active[kAccountEmailKeyFromFile] ?: @"";
+        settings[kAccountNameKeyFromFile] = active[kAccountNameKeyFromFile] ?: active[kAccountLabelKey] ?: @"";
+        [self writeSettingsDictionary:settings];
+    }
+    return active;
+}
+
++ (NSString *)activeAccountId {
+    return [self activeAccount][kAccountIdKey];
+}
+
++ (NSString *)activeAccountHomePath {
+    NSDictionary *account = [self activeAccount];
+    NSString *homePath = account[kAccountHomeKey];
+    if (homePath.length == 0) {
+        homePath = [self accountHomePathForId:@"legacy"];
+    }
+    [[NSFileManager defaultManager] createDirectoryAtPath:[homePath stringByAppendingPathComponent:@"tmp"] withIntermediateDirectories:YES attributes:nil error:nil];
+    return homePath;
+}
+
++ (NSString *)keychainServiceForAccountId:(NSString *)accountId {
+    NSDictionary *account = accountId.length > 0 ? [self accountForId:accountId] : [self activeAccount];
+    NSString *service = account[kAccountKeychainServiceKey];
+    if (service.length > 0) {
+        return service;
+    }
+    if (accountId.length > 0 && ![accountId isEqualToString:@"legacy"]) {
+        return [NSString stringWithFormat:@"ipatool-auth-%@", [self safeAccountIdFromString:accountId]];
+    }
+    return kDefaultIpatoolKeychainService;
+}
+
++ (NSString *)beginPendingAccountHomePath {
+    pendingLoginAccountId = [NSString stringWithFormat:@"acct-%@", [[[NSUUID UUID] UUIDString] lowercaseString]];
+    NSString *homePath = [self accountHomePathForId:pendingLoginAccountId];
+    [[NSFileManager defaultManager] createDirectoryAtPath:[homePath stringByAppendingPathComponent:@"tmp"] withIntermediateDirectories:YES attributes:nil error:nil];
+    return homePath;
+}
+
++ (NSString *)pendingAccountId {
+    return pendingLoginAccountId;
+}
+
++ (void)cancelPendingAccount {
+    if (pendingLoginAccountId.length > 0) {
+        [[NSFileManager defaultManager] removeItemAtPath:[self accountHomePathForId:pendingLoginAccountId] error:nil];
+    }
+    pendingLoginAccountId = nil;
+}
+
++ (void)activateAccountWithId:(NSString *)accountId {
+    NSDictionary *account = [self accountForId:accountId];
+    if (!account) {
+        return;
+    }
+    NSMutableDictionary *settings = [self settingsDictionary];
+    settings[kActiveAccountIdKeyFromFile] = account[kAccountIdKey];
+    settings[kAuthenticatedKeyFromFile] = @"YES";
+    settings[kAccountEmailKeyFromFile] = account[kAccountEmailKeyFromFile] ?: @"";
+    settings[kAccountNameKeyFromFile] = account[kAccountNameKeyFromFile] ?: account[kAccountLabelKey] ?: @"";
+    [self writeSettingsDictionary:settings];
+}
+
++ (void)addOrUpdateAccountWithEmail:(NSString *)email authName:(NSString *)authName storefront:(NSString *)storefront accountId:(NSString *)accountId {
+    NSString *resolvedAccountId = accountId.length > 0 ? accountId : [self activeAccountId];
+    if (resolvedAccountId.length == 0) {
+        resolvedAccountId = [self safeAccountIdFromString:email];
+    }
+    NSMutableDictionary *settings = [self settingsDictionary];
+    NSMutableArray *accounts = [[self accounts] mutableCopy];
+    NSMutableDictionary *updatedAccount = nil;
+    NSUInteger existingIndex = NSNotFound;
+    for (NSUInteger i = 0; i < accounts.count; i++) {
+        NSDictionary *account = accounts[i];
+        if ([account[kAccountIdKey] isEqualToString:resolvedAccountId]) {
+            updatedAccount = [account mutableCopy];
+            existingIndex = i;
+            break;
+        }
+    }
+    if (!updatedAccount) {
+        updatedAccount = [NSMutableDictionary dictionary];
+    }
+    NSString *name = authName.length > 0 ? authName : (email ?: kUnknownValue);
+    updatedAccount[kAccountIdKey] = resolvedAccountId;
+    updatedAccount[kAccountLabelKey] = name;
+    updatedAccount[kAccountEmailKeyFromFile] = email ?: @"";
+    updatedAccount[kAccountNameKeyFromFile] = name;
+    updatedAccount[kAccountHomeKey] = [self accountHomePathForId:resolvedAccountId];
+    updatedAccount[kAccountStorefrontKey] = storefront.length > 0 ? storefront : kDefaultInitialCountry;
+    updatedAccount[kAccountKeychainServiceKey] = [resolvedAccountId isEqualToString:@"legacy"] ? kDefaultIpatoolKeychainService : [NSString stringWithFormat:@"ipatool-auth-%@", resolvedAccountId];
+    [self ensureAccountDirectory:updatedAccount];
+    if (existingIndex == NSNotFound) {
+        [accounts addObject:updatedAccount];
+    } else {
+        accounts[existingIndex] = updatedAccount;
+    }
+    settings[kAccountsKeyFromFile] = accounts;
+    settings[kActiveAccountIdKeyFromFile] = resolvedAccountId;
+    settings[kAccountEmailKeyFromFile] = email ?: @"";
+    settings[kAccountNameKeyFromFile] = name;
+    settings[kAuthenticatedKeyFromFile] = @"YES";
+    settings[kLastLoginDateKeyFromFile] = [NSDate date];
+    [self writeSettingsDictionary:settings];
+    pendingLoginAccountId = nil;
+}
+
++ (void)deleteAccountWithId:(NSString *)accountId {
+    if (accountId.length == 0) {
+        return;
+    }
+    NSMutableDictionary *settings = [self settingsDictionary];
+    NSMutableArray *remainingAccounts = [NSMutableArray array];
+    NSDictionary *deletedAccount = nil;
+    for (NSDictionary *account in [self accounts]) {
+        if ([account[kAccountIdKey] isEqualToString:accountId]) {
+            deletedAccount = account;
+        } else {
+            [remainingAccounts addObject:account];
+        }
+    }
+    if (deletedAccount[kAccountHomeKey]) {
+        [[NSFileManager defaultManager] removeItemAtPath:deletedAccount[kAccountHomeKey] error:nil];
+    }
+    settings[kAccountsKeyFromFile] = remainingAccounts;
+    if (remainingAccounts.count > 0) {
+        NSDictionary *nextAccount = remainingAccounts.firstObject;
+        settings[kActiveAccountIdKeyFromFile] = nextAccount[kAccountIdKey];
+        settings[kAuthenticatedKeyFromFile] = @"YES";
+        settings[kAccountEmailKeyFromFile] = nextAccount[kAccountEmailKeyFromFile] ?: @"";
+        settings[kAccountNameKeyFromFile] = nextAccount[kAccountNameKeyFromFile] ?: nextAccount[kAccountLabelKey] ?: @"";
+    } else {
+        [settings removeObjectForKey:kActiveAccountIdKeyFromFile];
+        settings[kAuthenticatedKeyFromFile] = @"NO";
+        settings[kAccountEmailKeyFromFile] = @"";
+        settings[kAccountNameKeyFromFile] = @"";
+        settings[kLastLogoutDateKeyFromFile] = [NSDate date];
+    }
+    [self writeSettingsDictionary:settings];
+}
+
++ (NSString *)downloadedAccountEmailForFileName:(NSString *)fileName {
+    if (fileName.length == 0) {
+        return nil;
+    }
+    NSDictionary *downloadedAccounts = [self settingsDictionary][kDownloadedAccountsKeyFromFile];
+    if (![downloadedAccounts isKindOfClass:[NSDictionary class]]) {
+        return nil;
+    }
+    NSString *email = downloadedAccounts[fileName];
+    return email.length > 0 ? email : nil;
+}
+
++ (void)saveDownloadedAccountEmail:(NSString *)email forFileName:(NSString *)fileName {
+    if (email.length == 0 || fileName.length == 0) {
+        return;
+    }
+    NSMutableDictionary *settings = [self settingsDictionary];
+    NSMutableDictionary *downloadedAccounts = [NSMutableDictionary dictionary];
+    NSDictionary *existing = settings[kDownloadedAccountsKeyFromFile];
+    if ([existing isKindOfClass:[NSDictionary class]]) {
+        [downloadedAccounts addEntriesFromDictionary:existing];
+    }
+    downloadedAccounts[fileName] = email;
+    settings[kDownloadedAccountsKeyFromFile] = downloadedAccounts;
+    [self writeSettingsDictionary:settings];
 }
 
 + (NSDictionary *)setupTaskAndPipesWithCommandposix:(NSString *)launchPath arg1:(NSString *)arg1 
@@ -216,16 +513,20 @@ NSData *readDataFromFD(int fd) {
 }
 
 + (id)getKeyFromFile:(NSString *)key defaultValueIfNil:(NSString *)defaultValue {
-    NSMutableDictionary *settings = [NSMutableDictionary dictionary];
-    [settings addEntriesFromDictionary:[NSDictionary dictionaryWithContentsOfFile:kIPARangerSettingsDict]];
+    NSMutableDictionary *settings = [self settingsDictionary];
+    if ([key isEqualToString:kAuthenticatedKeyFromFile]) {
+        NSArray *storedAccounts = settings[kAccountsKeyFromFile];
+        if ([storedAccounts isKindOfClass:[NSArray class]] && storedAccounts.count > 0) {
+            return @"YES";
+        }
+    }
     return settings[key] ? settings[key] : defaultValue;
 }
 
 + (void)saveKeyToFile:(NSString *)key withValue:(NSString *)value {
-    NSMutableDictionary *settings = [NSMutableDictionary dictionary];
-    [settings addEntriesFromDictionary:[NSDictionary dictionaryWithContentsOfFile:kIPARangerSettingsDict]];
+    NSMutableDictionary *settings = [self settingsDictionary];
     settings[key] = value;
-    [settings writeToFile:kIPARangerSettingsDict atomically:YES];
+    [self writeSettingsDictionary:settings];
     //post a notification once we save a country
     if ([[key lowercaseString] containsString:@"country"]) {
         [[NSNotificationCenter defaultCenter] postNotificationName:kIPARCountryChangedNotification object:nil];
@@ -233,8 +534,7 @@ NSData *readDataFromFD(int fd) {
 }
 
 + (void)accountDetailsToFile:(NSString *)userEmail authName:(NSString *)authName authenticated:(NSString *)authenticated {
-    NSMutableDictionary *settings = [NSMutableDictionary dictionary];
-    [settings addEntriesFromDictionary:[NSDictionary dictionaryWithContentsOfFile:kIPARangerSettingsDict]];
+    NSMutableDictionary *settings = [self settingsDictionary];
     settings[kAccountEmailKeyFromFile] = userEmail;
     settings[kAccountNameKeyFromFile] = authName;
     settings[kAuthenticatedKeyFromFile] = authenticated;
@@ -243,7 +543,7 @@ NSData *readDataFromFD(int fd) {
     } else {
         settings[kLastLoginDateKeyFromFile] = [NSDate date];
     }
-    [settings writeToFile:kIPARangerSettingsDict atomically:YES];
+    [self writeSettingsDictionary:settings];
 }
 
 + (NSString *)emojiFlagForISOCountryCode:(NSString *)countryCode {
@@ -436,4 +736,3 @@ NSData *readDataFromFD(int fd) {
     kill(spawnedProcessPid, SIGKILL);
 }
 @end
-

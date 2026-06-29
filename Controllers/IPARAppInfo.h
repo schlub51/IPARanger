@@ -4,5 +4,6 @@
 @interface IPARAppInfo : NSObject
 @property (nonatomic, strong) NSString *bundleID;
 @property (nonatomic, strong) NSString *appName;
+@property (nonatomic, strong) NSString *minimumOS;
 @property (nonatomic, strong) UIImage *appIcon;
 @end

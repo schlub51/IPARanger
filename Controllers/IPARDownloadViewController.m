@@ -1,7 +1,10 @@
 #import "IPARDownloadViewController.h"
 #import "IPARLoginScreenViewController.h"
+#import "IPARSearchViewController.h"
+#import "IPARAccountAndCreditsController.h"
 #import "IPARCountryTableViewController_deprecated.h"
 #import "IPARAppInfo.h"
+#import "IPARVersionPickerViewController.h"
 #import "../Utils/IPARUtils.h"
 #import "../Extensions/IPARConstants.h"
 #import "../Cells/IPARAppCell.h"
@@ -13,17 +16,24 @@
 @interface IPARDownloadViewController () 
 @property (nonatomic, strong) NSMutableArray *existingApps;
 @property (nonatomic) UIProgressView *progressView;
+@property (nonatomic) UIView *downloadBannerView;
+@property (nonatomic) UILabel *downloadStatusLabel;
 @property (nonatomic) NSString *currentPrecentageDownload;
 @property (nonatomic) UIViewController *downloadViewController;
 @property (nonatomic) UIAlertController *downloadAlertController;
 @property (nonatomic, strong) NSMutableArray *linesErrorOutput;
 @property (nonatomic) NSString *lastBundleDownload;
+@property (nonatomic) NSDate *currentDownloadStartDate;
+@property (nonatomic) NSString *currentDownloadAccountEmail;
+@property (nonatomic) NSString *currentDownloadOutputFileName;
+@property (nonatomic) NSSet *currentDownloadExistingFiles;
 @property (nonatomic) NSTimer *downloadTimer;
 @property (nonatomic, strong) IPARCountryTableViewController *countryTableViewController;
 @property (nonatomic) UIBarButtonItem *countryButton;
 @property (nonatomic) NSString *lastCountrySelected;
 @property (nonatomic) UILabel *noDataLabel;
 @property (nonatomic) BOOL isRefreshing;
+@property (nonatomic) BOOL downloadInProgress;
 @end
 
 //improve download progress bar, its ugly.
@@ -34,8 +44,13 @@
         self.title = kDownloadTitle;
 		self.tabBarItem.image = [UIImage systemImageNamed:kTabbarDownloadingSectionSystemImage];
 		self.tabBarItem.title = kDownloadTitle;
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleDownloadBundleNotification:) name:kIPARDownloadBundleNotification object:nil];
     }
     return self;
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)loadView {
@@ -49,6 +64,7 @@
     _downloadAlertController = [UIAlertController alertControllerWithTitle:nil message:nil preferredStyle:UIAlertControllerStyleAlert];
     _countryTableViewController = [[IPARCountryTableViewController alloc] initWithCaller:@"Downloader"];
     _progressView = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
+    _downloadBannerView = [self createDownloadBannerView];
     _noDataLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, self.tableView.bounds.size.width, self.tableView.bounds.size.height)];
     _downloadViewController = [[UIViewController alloc] init];
     NSFileManager *fileManager = [NSFileManager defaultManager];
@@ -94,6 +110,58 @@
 
 - (void)setupProgressViewCenter {
     self.progressView.center = CGPointMake(self.downloadViewController.view.frame.size.width/2, self.downloadViewController.view.frame.size.height/2);
+}
+
+- (UIView *)createDownloadBannerView {
+    UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, 76)];
+    container.backgroundColor = UIColor.systemBackgroundColor;
+
+    UIView *banner = [[UIView alloc] initWithFrame:CGRectZero];
+    banner.translatesAutoresizingMaskIntoConstraints = NO;
+    banner.backgroundColor = UIColor.secondarySystemBackgroundColor;
+    banner.layer.cornerRadius = 12;
+    banner.layer.cornerCurve = kCACornerCurveContinuous;
+    [container addSubview:banner];
+
+    self.downloadStatusLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    self.downloadStatusLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    self.downloadStatusLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightSemibold];
+    self.downloadStatusLabel.textColor = UIColor.labelColor;
+    self.downloadStatusLabel.adjustsFontSizeToFitWidth = YES;
+    self.downloadStatusLabel.minimumScaleFactor = 0.75;
+    [banner addSubview:self.downloadStatusLabel];
+
+    self.progressView.translatesAutoresizingMaskIntoConstraints = NO;
+    [banner addSubview:self.progressView];
+
+    UIButton *cancelButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    cancelButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [cancelButton setTitle:@"Cancel" forState:UIControlStateNormal];
+    cancelButton.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightRegular];
+    [cancelButton addTarget:self action:@selector(cancelActiveDownload) forControlEvents:UIControlEventTouchUpInside];
+    [banner addSubview:cancelButton];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [banner.topAnchor constraintEqualToAnchor:container.topAnchor constant:10],
+        [banner.leadingAnchor constraintEqualToAnchor:container.leadingAnchor constant:20],
+        [banner.trailingAnchor constraintEqualToAnchor:container.trailingAnchor constant:-20],
+        [banner.bottomAnchor constraintEqualToAnchor:container.bottomAnchor constant:-8],
+
+        [self.downloadStatusLabel.topAnchor constraintEqualToAnchor:banner.topAnchor constant:10],
+        [self.downloadStatusLabel.leadingAnchor constraintEqualToAnchor:banner.leadingAnchor constant:12],
+        [self.downloadStatusLabel.trailingAnchor constraintEqualToAnchor:cancelButton.leadingAnchor constant:-8],
+
+        [cancelButton.centerYAnchor constraintEqualToAnchor:self.downloadStatusLabel.centerYAnchor],
+        [cancelButton.trailingAnchor constraintEqualToAnchor:banner.trailingAnchor constant:-12],
+        [cancelButton.widthAnchor constraintEqualToConstant:52],
+
+        [self.progressView.topAnchor constraintEqualToAnchor:self.downloadStatusLabel.bottomAnchor constant:10],
+        [self.progressView.leadingAnchor constraintEqualToAnchor:banner.leadingAnchor constant:12],
+        [self.progressView.trailingAnchor constraintEqualToAnchor:banner.trailingAnchor constant:-12],
+        [self.progressView.bottomAnchor constraintLessThanOrEqualToAnchor:banner.bottomAnchor constant:-10]
+    ]];
+
+    return container;
 }
 
 - (void)setupTableviewPropsAndBackground {
@@ -245,13 +313,28 @@
 
 - (AlertActionBlock)getAlertBlockForLogout {
     AlertActionBlock alertBlockConfirm = ^(void) {
-        [IPARUtils accountDetailsToFile:@"" authName:@"" authenticated:@"NO"];
+        NSString *accountId = [IPARUtils activeAccountId];
+        NSString *commandToExecute = [NSString stringWithFormat:kLogoutCommand, kIpatoolScriptPath];
+        [IPARUtils executeCommandAndGetJSON:kLaunchPathBash arg1:kBashCommandKey arg2:commandToExecute arg3:nil accountId:accountId];
+        [IPARUtils deleteAccountWithId:accountId];
         IPARLoginScreenViewController *loginScreenVC = [[IPARLoginScreenViewController alloc] init];
         [self.navigationController popToRootViewControllerAnimated:NO];
         [self.tabBarController.view removeFromSuperview];
-        UINavigationController *navController = [[UINavigationController alloc] initWithRootViewController:loginScreenVC];
         UIWindow *window = UIApplication.sharedApplication.delegate.window;
-        window.rootViewController = navController;
+        if ([IPARUtils accounts].count > 0) {
+            IPARSearchViewController *searchVC = [[IPARSearchViewController alloc] init];
+            UINavigationController *searchNC = [[UINavigationController alloc] initWithRootViewController:searchVC];
+            IPARDownloadViewController *downloadVC = [[IPARDownloadViewController alloc] init];
+            UINavigationController *downloadNC = [[UINavigationController alloc] initWithRootViewController:downloadVC];
+            IPARAccountAndCredits *accountVC = [[IPARAccountAndCredits alloc] init];
+            UINavigationController *accountNC = [[UINavigationController alloc] initWithRootViewController:accountVC];
+            UITabBarController *tabBarController = [[UITabBarController alloc] init];
+            tabBarController.viewControllers = @[searchNC, downloadNC, accountNC];
+            window.rootViewController = tabBarController;
+        } else {
+            UINavigationController *navController = [[UINavigationController alloc] initWithRootViewController:loginScreenVC];
+            window.rootViewController = navController;
+        }
     };
     return alertBlockConfirm;
 }
@@ -298,24 +381,63 @@
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSString *filePath = [kIPARangerDocumentsPath stringByAppendingPathComponent:fileName];
 
-    NSDictionary *cachedApp = cachedData[fileName];
-    if (cachedApp) {
-        [self addCachedAppToExistingApps:cachedApp];
-        return;
-    }
-    
     NSError *error = nil;
     NSDictionary *attributes = [fileManager attributesOfItemAtPath:filePath error:&error];
     if (error) {
         return;
     }
+
+    NSDictionary *cachedApp = cachedData[fileName];
+    if (cachedApp && [cachedApp[kAppMinimumOSIndex] length] > 0) {
+        NSMutableDictionary *mutableCachedApp = [cachedApp mutableCopy];
+        NSString *accountEmail = [self accountEmailForFileName:fileName attributes:attributes];
+        if (accountEmail.length > 0 && ![mutableCachedApp[kAppAccountEmailIndex] length]) {
+            mutableCachedApp[kAppAccountEmailIndex] = accountEmail;
+            cachedData[fileName] = mutableCachedApp;
+        }
+        [self addCachedAppToExistingApps:mutableCachedApp];
+        return;
+    }
     
     NSDictionary *appData = [self extractAppDataFromIPAFile:fileName withAttributes:attributes];
     if (appData) {
-        [self.existingApps addObject:appData];
-        NSMutableDictionary *cachedAppData = [self createCachedAppDataFrom:appData];
+        NSMutableDictionary *mutableAppData = [appData mutableCopy];
+        NSString *accountEmail = [self accountEmailForFileName:fileName attributes:attributes];
+        if (accountEmail.length > 0) {
+            mutableAppData[kAppAccountEmailIndex] = accountEmail;
+        } else if ([cachedApp[kAppAccountEmailIndex] length] > 0) {
+            mutableAppData[kAppAccountEmailIndex] = cachedApp[kAppAccountEmailIndex];
+        }
+        [self.existingApps addObject:mutableAppData];
+        NSMutableDictionary *cachedAppData = [self createCachedAppDataFrom:mutableAppData];
         cachedData[fileName] = cachedAppData;
     }
+}
+
+- (NSString *)accountEmailForFileName:(NSString *)fileName attributes:(NSDictionary *)attributes {
+    NSString *storedEmail = [IPARUtils downloadedAccountEmailForFileName:fileName];
+    if (storedEmail.length > 0) {
+        return storedEmail;
+    }
+    return [self accountEmailForNewDownloadFile:fileName attributes:attributes];
+}
+
+- (NSString *)accountEmailForNewDownloadFile:(NSString *)fileName attributes:(NSDictionary *)attributes {
+    if (self.currentDownloadAccountEmail.length == 0) {
+        return nil;
+    }
+    if (self.currentDownloadOutputFileName.length > 0) {
+        if ([fileName isEqualToString:self.currentDownloadOutputFileName]) {
+            return self.currentDownloadAccountEmail;
+        }
+    }
+    if (self.currentDownloadExistingFiles && ![self.currentDownloadExistingFiles containsObject:fileName]) {
+        return self.currentDownloadAccountEmail;
+    }
+    if (self.lastBundleDownload.length == 0 || ![fileName hasPrefix:self.lastBundleDownload]) {
+        return nil;
+    }
+    return self.currentDownloadAccountEmail;
 }
 
 - (void)addCachedAppToExistingApps:(NSDictionary *)cachedApp {
@@ -339,12 +461,16 @@
     }
     
     UIImage *appImage = appInfo.appIcon ?: [UIImage systemImageNamed:kUnknownSystemImage];
-    return @{
+    NSMutableDictionary *appData = [@{
         kFilenameIndex: fileName,
         kSizeIndex: humanReadableSize,
         kAppnameIndex: appInfo.appName,
         kAppimageIndex: appImage
-    };
+    } mutableCopy];
+    if (appInfo.minimumOS.length > 0) {
+        appData[kAppMinimumOSIndex] = appInfo.minimumOS;
+    }
+    return appData;
 }
 
 - (NSMutableDictionary *)createCachedAppDataFrom:(NSDictionary *)appData {
@@ -377,6 +503,7 @@
     NSString *bundleID = stdOutput[kstdOutput][0] ?: kUnknownValue;
     
     NSString *appName = [self extractAppNameFromPlist:infoPlistPath];
+    NSString *minimumOS = [self extractMinimumOSFromPlist:infoPlistPath];
     
     NSString *cacheDir = [NSString stringWithFormat:@"%@%@/", kIPARangerCacheDirPath, bundleID];
     [self createDirectoryIfNeeded:cacheDir];
@@ -392,9 +519,19 @@
     IPARAppInfo *appInfo = [[IPARAppInfo alloc] init];
     appInfo.bundleID = bundleID;
     appInfo.appName = appName;
+    appInfo.minimumOS = minimumOS;
     appInfo.appIcon = appIcon;
     
     return appInfo;
+}
+
+- (NSString *)extractMinimumOSFromPlist:(NSString *)infoPlistPath {
+    NSDictionary *stdOutput = [IPARUtils setupTaskAndPipesWithCommandposix:kLaunchPathPlutil arg1:kKeyForPlutil arg2:kKeyToExtractPlutilMinimumOS arg3:infoPlistPath];
+    NSString *minimumOS = stdOutput[kstdOutput][0];
+    if (!minimumOS || [minimumOS isEqualToString:@""]) {
+        return nil;
+    }
+    return minimumOS;
 }
 
 - (NSString *)extractAppNameFromPlist:(NSString *)infoPlistPath {
@@ -429,23 +566,9 @@
         if (self.lastBundleDownload == nil || [self.lastBundleDownload stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]].length == 0) {
             [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:@"Bundle ID cannot be empty" hasTextfield:NO withTextfieldBlock:nil
                             alertConfirmationBlock:nil withConfirmText:@"OK" alertCancelBlock:nil withCancelText:nil presentOn:self];
+            return;
         }
-        [self showDownloadDialog];
-        self.currentPrecentageDownload = 0;
-        [self.progressView setProgress:0.0f];
-        NSString *commandToExecute = [NSString stringWithFormat:kDownloadCommandBundleOutputpathCountry, kIpatoolScriptPath, self.lastBundleDownload, kIPARangerDocumentsPath, kDownloadProgressFileOutput];
-        NSDictionary *lastCommandResult = [IPARUtils executeCommandAndGetJSON:kLaunchPathBash arg1:kBashCommandKey arg2:commandToExecute arg3:nil];
-        // this means we had errors trying to run download..
-        if ([lastCommandResult[kJsonLevel] isEqualToString:kJsonLevelError]) {
-           [self dismissViewControllerAnimated:YES completion:^{
-                [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:lastCommandResult[kJsonLevelError] hasTextfield:NO withTextfieldBlock:nil
-                            alertConfirmationBlock:nil withConfirmText:@"OK" alertCancelBlock:nil withCancelText:nil presentOn:self];
-            }]; 
-        } else {
-            // download should start, remove the progress file if needed
-            [[NSFileManager defaultManager] removeItemAtPath:kDownloadProgressFileOutput error:nil];
-            [self startMonitoringDownloadProgress];
-        }
+        [self fetchVersionsForBundleID:self.lastBundleDownload];
     };
 
     AlertActionBlockWithTextField alertBlockTextfield = ^(UITextField *textField) {
@@ -455,6 +578,142 @@
     [IPARUtils presentDialogWithTitle:kIPARangerDownloadPromptHeadline message:@"Enter App Bundle ID" hasTextfield:YES withTextfieldBlock:alertBlockTextfield
                     alertConfirmationBlock:alertBlockConfirm withConfirmText:@"Download" alertCancelBlock:nil withCancelText:@"Cancel" presentOn:self];
 
+}
+
+- (void)handleDownloadBundleNotification:(NSNotification *)notification {
+    NSString *bundleID = notification.userInfo[kIPARDownloadBundleUserInfoKey];
+    if (![bundleID isKindOfClass:[NSString class]] || [bundleID stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]].length == 0) {
+        return;
+    }
+
+    [self view];
+    self.lastBundleDownload = bundleID;
+    [self fetchVersionsForBundleID:bundleID];
+}
+
+- (void)fetchVersionsForBundleID:(NSString *)bundleID {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Fetching available versions"
+                                                                    message:@"\n\n\n\n"
+                                                             preferredStyle:UIAlertControllerStyleAlert];
+    [alert.view addSubview:[IPARUtils createActivitiyIndicatorWithPoint:CGPointMake(130.5, 110)]];
+    [self presentViewController:alert animated:YES completion:nil];
+
+    NSString *lookupURLString = [NSString stringWithFormat:@"https://itunes.apple.com/lookup?bundleId=%@&limit=1&media=software", bundleID];
+    NSURL *lookupURL = [NSURL URLWithString:lookupURLString];
+    NSURLSessionDataTask *lookupTask = [[NSURLSession sharedSession] dataTaskWithURL:lookupURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error) {
+            [self dismissVersionFetchWithError:error.localizedDescription];
+            return;
+        }
+
+        NSError *jsonError = nil;
+        NSDictionary *lookupResult = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+        if (jsonError) {
+            [self dismissVersionFetchWithError:jsonError.localizedDescription];
+            return;
+        }
+
+        NSArray *results = lookupResult[@"results"];
+        if (![results isKindOfClass:[NSArray class]] || results.count == 0) {
+            [self dismissVersionFetchWithError:@"No App Store app was found for this bundle ID."];
+            return;
+        }
+
+        NSNumber *appID = results[0][@"trackId"];
+        NSString *historyURLString = [NSString stringWithFormat:@"https://apis.bilin.eu.org/history/%@", appID];
+            NSURL *historyURL = [NSURL URLWithString:historyURLString];
+        NSURLSessionDataTask *historyTask = [[NSURLSession sharedSession] dataTaskWithURL:historyURL completionHandler:^(NSData *historyData, NSURLResponse *historyResponse, NSError *historyError) {
+            if (historyError) {
+                [self offerLatestVersionDownloadForBundleID:bundleID message:historyError.localizedDescription];
+                return;
+            }
+
+            NSError *historyJSONError = nil;
+            NSDictionary *historyResult = [NSJSONSerialization JSONObjectWithData:historyData options:0 error:&historyJSONError];
+            if (historyJSONError) {
+                [self offerLatestVersionDownloadForBundleID:bundleID message:historyJSONError.localizedDescription];
+                return;
+            }
+
+            NSArray *versions = historyResult[@"data"];
+            if (![versions isKindOfClass:[NSArray class]] || versions.count == 0) {
+                [self offerLatestVersionDownloadForBundleID:bundleID message:@"No version IDs were returned by the version history server."];
+                return;
+            }
+
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self dismissViewControllerAnimated:YES completion:^{
+                    IPARVersionPickerViewController *picker = [[IPARVersionPickerViewController alloc] initWithVersions:versions completion:^(NSString *externalVersionID) {
+                        [self startDownloadForBundleID:bundleID externalVersionID:externalVersionID];
+                    }];
+                    UINavigationController *navigationController = [[UINavigationController alloc] initWithRootViewController:picker];
+                    navigationController.modalPresentationStyle = UIModalPresentationFormSheet;
+                    [self presentViewController:navigationController animated:YES completion:nil];
+                }];
+            });
+        }];
+        [historyTask resume];
+    }];
+    [lookupTask resume];
+}
+
+- (void)offerLatestVersionDownloadForBundleID:(NSString *)bundleID message:(NSString *)message {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self dismissViewControllerAnimated:YES completion:^{
+            NSString *fallbackMessage = [NSString stringWithFormat:@"%@\n\nYou can still download the latest version.", message ?: @"Version history is unavailable."];
+            AlertActionBlockWithTextField confirmBlock = ^(UITextField *textField) {
+                [self startDownloadForBundleID:bundleID externalVersionID:@""];
+            };
+            [IPARUtils presentDialogWithTitle:kIPARangerWarningHeadline message:fallbackMessage hasTextfield:NO withTextfieldBlock:nil
+                        alertConfirmationBlock:confirmBlock withConfirmText:@"Download Latest" alertCancelBlock:nil withCancelText:@"Cancel" presentOn:self];
+        }];
+    });
+}
+
+- (void)dismissVersionFetchWithError:(NSString *)message {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self dismissViewControllerAnimated:YES completion:^{
+            [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:message hasTextfield:NO withTextfieldBlock:nil
+                        alertConfirmationBlock:nil withConfirmText:@"OK" alertCancelBlock:nil withCancelText:nil presentOn:self];
+        }];
+    });
+}
+
+- (void)startDownloadForBundleID:(NSString *)bundleID externalVersionID:(NSString *)externalVersionID {
+    if (self.downloadInProgress) {
+        [IPARUtils presentDialogWithTitle:kIPARangerWarningHeadline message:@"A download is already running." hasTextfield:NO withTextfieldBlock:nil
+                    alertConfirmationBlock:nil withConfirmText:@"OK" alertCancelBlock:nil withCancelText:nil presentOn:self];
+        return;
+    }
+    self.lastBundleDownload = bundleID;
+    [self showDownloadDialog];
+    self.currentPrecentageDownload = @"0";
+    [self.progressView setProgress:0.0f];
+    self.downloadInProgress = YES;
+    self.currentDownloadStartDate = [NSDate date];
+    self.currentDownloadOutputFileName = nil;
+    self.currentDownloadExistingFiles = [NSSet setWithArray:[self getIPAFilesFromDocumentsDirectory]];
+    NSDictionary *activeAccount = [IPARUtils activeAccount];
+    self.currentDownloadAccountEmail = activeAccount[kAccountEmailKeyFromFile];
+
+    NSString *commandToExecute;
+    if (externalVersionID.length > 0) {
+        commandToExecute = [NSString stringWithFormat:kDownloadCommandBundleVersionOutputpathCountry, kIpatoolScriptPath, bundleID, externalVersionID, kIPARangerDocumentsPath, kDownloadProgressFileOutput];
+    } else {
+        commandToExecute = [NSString stringWithFormat:kDownloadCommandBundleOutputpathCountry, kIpatoolScriptPath, bundleID, kIPARangerDocumentsPath, kDownloadProgressFileOutput];
+    }
+
+    NSDictionary *lastCommandResult = [IPARUtils executeCommandAndGetJSON:kLaunchPathBash arg1:kBashCommandKey arg2:commandToExecute arg3:nil];
+    // this means we had errors trying to run download..
+    if ([lastCommandResult[kJsonLevel] isEqualToString:kJsonLevelError]) {
+        [self finishDownloadUI];
+        [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:lastCommandResult[kJsonLevelError] hasTextfield:NO withTextfieldBlock:nil
+                    alertConfirmationBlock:nil withConfirmText:@"OK" alertCancelBlock:nil withCancelText:nil presentOn:self];
+    } else {
+        // download should start, remove the progress file if needed
+        [[NSFileManager defaultManager] removeItemAtPath:kDownloadProgressFileOutput error:nil];
+        [self startMonitoringDownloadProgress];
+    }
 }
 
 - (void)startMonitoringDownloadProgress {
@@ -486,30 +745,33 @@
 
             dispatch_async(dispatch_get_main_queue(), ^{
                 if ([level isEqualToString:kJsonLevelError]) {
+                    [self finishDownloadUI];
                     if ([jsonDict[kJsonLevelError] containsString:@"open zip"]) {
-                        [self dismissViewControllerAnimated:YES completion:^{
-                            [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:[NSString stringWithFormat:@"App with same name already exists in %@", kIPARangerDocumentsPath] hasTextfield:NO withTextfieldBlock:nil 
-                                alertConfirmationBlock:nil withConfirmText:@"OK" alertCancelBlock:nil withCancelText:nil presentOn:self];
-                        }]; 
+                        [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:[NSString stringWithFormat:@"App with same name already exists in %@", kIPARangerDocumentsPath] hasTextfield:NO withTextfieldBlock:nil
+                            alertConfirmationBlock:nil withConfirmText:@"OK" alertCancelBlock:nil withCancelText:nil presentOn:self];
                     } else if ([jsonDict[kJsonLevelError] containsString:@"password token is expired"]) {
-                        [self dismissViewControllerAnimated:YES completion:^{
-                            [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:jsonDict[kJsonLevelError] hasTextfield:NO withTextfieldBlock:nil
-                                        alertConfirmationBlock:nil withConfirmText:nil alertCancelBlock:[self getAlertBlockForLogout] withCancelText:@"Logout" presentOn:self];
-                        }]; 
+                        [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:jsonDict[kJsonLevelError] hasTextfield:NO withTextfieldBlock:nil
+                                    alertConfirmationBlock:nil withConfirmText:nil alertCancelBlock:[self getAlertBlockForLogout] withCancelText:@"Logout" presentOn:self];
                     } else {
-                        [self dismissViewControllerAnimated:YES completion:^{
-                            [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:jsonDict[kJsonLevelError] hasTextfield:NO withTextfieldBlock:nil 
-                                alertConfirmationBlock:nil withConfirmText:@"OK" alertCancelBlock:nil withCancelText:nil presentOn:self];
-                        }]; 
+                        [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:jsonDict[kJsonLevelError] hasTextfield:NO withTextfieldBlock:nil
+                            alertConfirmationBlock:nil withConfirmText:@"OK" alertCancelBlock:nil withCancelText:nil presentOn:self];
                     }
                 } else if ([level isEqualToString:@"info"] && success) {
-                    [self dismissViewControllerAnimated:YES completion:^{
-                        AlertActionBlock alertBlockConfirm = ^(void) {
-                            [self refreshTableData];
-                        };
-                        [IPARUtils presentDialogWithTitle:kIPARangerSuccessMessage message:@"The download finished successfully!" hasTextfield:NO withTextfieldBlock:nil
-                                alertConfirmationBlock:nil withConfirmText:nil alertCancelBlock:alertBlockConfirm withCancelText:@"OK" presentOn:self];
-                    }]; 
+                    NSString *outputPath = jsonDict[@"output"];
+                    if ([outputPath isKindOfClass:[NSString class]] && outputPath.length > 0) {
+                        self.currentDownloadOutputFileName = [outputPath lastPathComponent];
+                        [IPARUtils saveDownloadedAccountEmail:self.currentDownloadAccountEmail forFileName:self.currentDownloadOutputFileName];
+                    }
+                    self.downloadInProgress = NO;
+                    self.tableView.tableHeaderView = nil;
+                    [self.progressView setProgress:0.0f];
+                    [self refreshTableData];
+                    self.currentDownloadStartDate = nil;
+                    self.currentDownloadAccountEmail = nil;
+                    self.currentDownloadOutputFileName = nil;
+                    self.currentDownloadExistingFiles = nil;
+                    [IPARUtils presentDialogWithTitle:kIPARangerSuccessMessage message:@"The download finished successfully!" hasTextfield:NO withTextfieldBlock:nil
+                            alertConfirmationBlock:nil withConfirmText:@"OK" alertCancelBlock:nil withCancelText:nil presentOn:self];
                 }
             });
 
@@ -527,6 +789,7 @@
         NSString *percentage = [fileContents substringWithRange:percentageRange];
         dispatch_async(dispatch_get_main_queue(), ^{
             self.currentPrecentageDownload = percentage;
+            self.downloadStatusLabel.text = [NSString stringWithFormat:@"Downloading %@ · %@%%", self.lastBundleDownload, percentage];
             [self.progressView setProgress:[percentage floatValue] / 100];
         });
     }
@@ -560,11 +823,28 @@
         cell.backgroundColor = UIColor.clearColor;
         cell.appName.text = self.existingApps[indexPath.row][kAppnameIndex];
         cell.appFilename.text = self.existingApps[indexPath.row][kFilenameIndex];
-        cell.appSize.text = [NSString stringWithFormat:@"%@", self.existingApps[indexPath.row][kSizeIndex]];
+        cell.appSize.text = [self metadataLineForApp:self.existingApps[indexPath.row]];
         cell.appImage.image = self.existingApps[indexPath.row][kAppimageIndex];
     }
 
     return cell;
+}
+
+- (NSString *)metadataLineForApp:(NSDictionary *)app {
+    NSMutableArray *parts = [NSMutableArray array];
+    NSString *size = app[kSizeIndex];
+    NSString *email = app[kAppAccountEmailIndex];
+    NSString *minimumOS = app[kAppMinimumOSIndex];
+    if (size.length > 0) {
+        [parts addObject:size];
+    }
+    if (email.length > 0) {
+        [parts addObject:[NSString stringWithFormat:@"From %@", email]];
+    }
+    if (minimumOS.length > 0) {
+        [parts addObject:[NSString stringWithFormat:@"iOS %@+", minimumOS]];
+    }
+    return [parts componentsJoinedByString:@" · "];
 }
 
 #pragma mark - Table View Delegate
@@ -784,14 +1064,30 @@
 }
 
 - (void)showDownloadDialog {
-    self.downloadAlertController.title = kIPARangerDownloadingMessage;
-    self.downloadAlertController.message = [NSString stringWithFormat:@"Downloading requested bundle: %@\n\n", self.lastBundleDownload];
-    self.progressView.frame = CGRectMake(15, 120, 230, 5);
-    [self.downloadAlertController.view addSubview:self.progressView];
-    [self presentViewController:self.downloadAlertController animated:YES completion:nil];
+    self.downloadStatusLabel.text = [NSString stringWithFormat:@"Downloading %@ · 0%%", self.lastBundleDownload];
+    self.tableView.tableHeaderView = self.downloadBannerView;
 }
 
 - (void)updateProgressBar {
     [self.progressView setProgress:[self.currentPrecentageDownload floatValue]/100];
+}
+
+- (void)finishDownloadUI {
+    self.downloadInProgress = NO;
+    self.tableView.tableHeaderView = nil;
+    [self.progressView setProgress:0.0f];
+    self.currentDownloadStartDate = nil;
+    self.currentDownloadAccountEmail = nil;
+    self.currentDownloadOutputFileName = nil;
+    self.currentDownloadExistingFiles = nil;
+}
+
+- (void)cancelActiveDownload {
+    [IPARUtils cancelScript];
+    if (self.downloadTimer) {
+        [self.downloadTimer invalidate];
+        self.downloadTimer = nil;
+    }
+    [self finishDownloadUI];
 }
 @end

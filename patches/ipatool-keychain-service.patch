@@ -1,0 +1,61 @@
+diff --git a/cmd/common.go b/cmd/common.go
+index 3b3a3de..a2b1a19 100644
+--- a/cmd/common.go
++++ b/cmd/common.go
+@@ -61,13 +61,18 @@ func newCookieJar(machine machine.Machine) http.CookieJar {
+ 
+ // newKeychain returns a new keychain instance.
+ func newKeychain(machine machine.Machine, logger log.Logger, interactive bool) keychain.Keychain {
++	serviceName := os.Getenv("IPATOOL_KEYCHAIN_SERVICE")
++	if serviceName == "" {
++		serviceName = KeychainServiceName
++	}
++
+ 	ring := util.Must(keyring.Open(keyring.Config{
+ 		AllowedBackends: []keyring.BackendType{
+ 			keyring.KeychainBackend,
+ 			keyring.SecretServiceBackend,
+ 			keyring.FileBackend,
+ 		},
+-		ServiceName: KeychainServiceName,
++		ServiceName: serviceName,
+ 		FileDir:     filepath.Join(machine.HomeDirectory(), ConfigDirectoryName),
+ 		FilePasswordFunc: func(s string) (string, error) {
+ 			if keychainPassphrase == "" && !interactive {
+diff --git a/pkg/keychain/keychain_set.go b/pkg/keychain/keychain_set.go
+index 49bf6cd..2bf9270 100644
+--- a/pkg/keychain/keychain_set.go
++++ b/pkg/keychain/keychain_set.go
+@@ -7,6 +7,8 @@ import (
+ )
+ 
+ func (k *keychain) Set(key string, data []byte) error {
++	_ = k.keyring.Remove(key)
++
+ 	err := k.keyring.Set(keyring.Item{
+ 		Key:  key,
+ 		Data: data,
+diff --git a/pkg/keychain/keychain_set_test.go b/pkg/keychain/keychain_set_test.go
+index bc580c7..47c9214 100644
+--- a/pkg/keychain/keychain_set_test.go
++++ b/pkg/keychain/keychain_set_test.go
+@@ -33,6 +33,9 @@ var _ = Describe("Keychain (Set)", func() {
+ 		var testData = []byte("test")
+ 
+ 		BeforeEach(func() {
++			mockKeyring.EXPECT().
++				Remove(testKey).
++				Return(nil)
+ 			mockKeyring.EXPECT().
+ 				Set(keyring.Item{
+ 					Key:  testKey,
+@@ -52,6 +55,9 @@ var _ = Describe("Keychain (Set)", func() {
+ 		var testData = []byte("test")
+ 
+ 		BeforeEach(func() {
++			mockKeyring.EXPECT().
++				Remove(testKey).
++				Return(nil)
+ 			mockKeyring.EXPECT().
+ 				Set(keyring.Item{
+ 					Key:  testKey,

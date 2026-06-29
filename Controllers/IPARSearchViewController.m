@@ -233,14 +233,33 @@
     UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
     [IPARUtils animateClickOnCell:cell];
     if (indexPath.row < [self.searchResults count]) {
-        AlertActionBlockWithTextField alertBlockConfirm = ^(UITextField *textField) {
+        NSDictionary *selectedApp = self.searchResults[indexPath.row];
+        NSString *bundleID = selectedApp[kAppBundleIndex];
+        NSString *appSelected = [NSString stringWithFormat:@"App Selected %@", selectedApp[kAppnameIndex]];
+        NSString *bundleSelected = [NSString stringWithFormat:@"Bundle ID: %@", bundleID];
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:kIPARangerCopyHeadline
+                                                                       message:[NSString stringWithFormat:@"%@\n\n%@", appSelected, bundleSelected]
+                                                                preferredStyle:UIAlertControllerStyleAlert];
+
+        UIAlertAction *downloadAction = [UIAlertAction actionWithTitle:@"Download" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            self.tabBarController.selectedIndex = 1;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[NSNotificationCenter defaultCenter] postNotificationName:kIPARDownloadBundleNotification
+                                                                    object:self
+                                                                  userInfo:@{kIPARDownloadBundleUserInfoKey: bundleID}];
+            });
+        }];
+
+        UIAlertAction *copyAction = [UIAlertAction actionWithTitle:@"Copy Bundle" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
             UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
-            pasteboard.string = self.searchResults[indexPath.row][kAppBundleIndex];
-        };
-        NSString *appSelected = [NSString stringWithFormat:@"App Selected %@",self.searchResults[indexPath.row][kAppnameIndex]];
-        NSString *bundleSelected = [NSString stringWithFormat:@"Bundle ID: %@", self.searchResults[indexPath.row][kAppBundleIndex]];
-        [IPARUtils presentDialogWithTitle:kIPARangerCopyHeadline message:[NSString stringWithFormat:@"%@\n\n%@", appSelected, bundleSelected]
-         hasTextfield:NO withTextfieldBlock:nil alertConfirmationBlock:alertBlockConfirm withConfirmText:@"Copy Bundle" alertCancelBlock:nil withCancelText:@"Cancel" presentOn:self];
+            pasteboard.string = bundleID;
+        }];
+
+        UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil];
+        [alert addAction:downloadAction];
+        [alert addAction:copyAction];
+        [alert addAction:cancelAction];
+        [self presentViewController:alert animated:YES completion:nil];
     } else {
         self.limitSearch += APPS_SEARCH_INITIAL_LIMIT;
         [self runSearchCommand];

@@ -14,6 +14,7 @@
 @property (nonatomic) UILabel *underLabel;
 @property (nonatomic) int welcomeMessageCounter;
 @property (nonatomic) NSTimer *welcomeMessageTimer;
+@property (nonatomic) NSString *loginAccountId;
 @end
 
 @implementation IPARLoginScreenViewController
@@ -274,6 +275,9 @@
 }
 
 - (void)handleLoginEmailPass {
+    [IPARUtils cancelPendingAccount];
+    [IPARUtils beginPendingAccountHomePath];
+    self.loginAccountId = [IPARUtils pendingAccountId];
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Logging in..."
                                                                 message:@"\n\n\n"
                                                             preferredStyle:UIAlertControllerStyleAlert];
@@ -283,8 +287,9 @@
     
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
         NSString *commandToExecute = [NSString stringWithFormat:kLoginCommandPathAccountPassword, kIpatoolScriptPath, self.emailTextField.text, self.passwordTextField.text];
-        self.lastCommandResult = [IPARUtils executeCommandAndGetJSON:kLaunchPathBash arg1:kBashCommandKey arg2:commandToExecute arg3:nil];
+        self.lastCommandResult = [IPARUtils executeCommandAndGetJSON:kLaunchPathBash arg1:kBashCommandKey arg2:commandToExecute arg3:nil accountId:self.loginAccountId];
         if ([self.lastCommandResult[kJsonLevel] isEqualToString:kJsonLevelError]) {
+           [IPARUtils cancelPendingAccount];
            [self dismissViewControllerAnimated:YES completion:^{
                 [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:self.lastCommandResult[kJsonLevelError] hasTextfield:NO withTextfieldBlock:nil
                             alertConfirmationBlock:nil withConfirmText:@"Try Again" alertCancelBlock:nil withCancelText:nil presentOn:self];
@@ -314,8 +319,12 @@
             textField.placeholder = textField.text;
     };
 
+    AlertActionBlock alertBlockCancel = ^(void) {
+        [IPARUtils cancelPendingAccount];
+    };
+
     [IPARUtils presentDialogWithTitle:@"Continue with 2FA" message:@"Please enter the 2FA you got from Apple" hasTextfield:YES withTextfieldBlock:alertBlockTextfield
-                    alertConfirmationBlock:alertBlockConfirm withConfirmText:@"OK" alertCancelBlock:nil withCancelText:@"Cancel" presentOn:self];
+                    alertConfirmationBlock:alertBlockConfirm withConfirmText:@"OK" alertCancelBlock:alertBlockCancel withCancelText:@"Cancel" presentOn:self];
 }
 
 - (void)handle2FALogic:(NSString *)twoFARes {
@@ -328,8 +337,9 @@
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
         NSString *commandToExecute = [NSString stringWithFormat:kLoginCommandPathAccountPassword2FA, kIpatoolScriptPath, self.emailTextField.text, self.passwordTextField.text, twoFARes];
-        self.lastCommandResult = [IPARUtils executeCommandAndGetJSON:kLaunchPathBash arg1:kBashCommandKey arg2:commandToExecute arg3:nil];
+        self.lastCommandResult = [IPARUtils executeCommandAndGetJSON:kLaunchPathBash arg1:kBashCommandKey arg2:commandToExecute arg3:nil accountId:self.loginAccountId];
         if ([self.lastCommandResult[kJsonLevel] isEqualToString:kJsonLevelError] || twoFARes == nil || twoFARes.length == 0) {
+           [IPARUtils cancelPendingAccount];
            [self dismissViewControllerAnimated:YES completion:^{
                 [IPARUtils presentDialogWithTitle:kIPARangerErrorHeadline message:self.lastCommandResult[kJsonLevelError] hasTextfield:NO withTextfieldBlock:nil
                             alertConfirmationBlock:nil withConfirmText:@"Try Again" alertCancelBlock:nil withCancelText:nil presentOn:self];
@@ -341,7 +351,15 @@
 }
 
 - (void)authToFile:(NSString *)authNameFromOutput {
-    [IPARUtils accountDetailsToFile:self.emailTextField.text authName:authNameFromOutput authenticated:@"YES"];
+    NSString *commandToExecute = [NSString stringWithFormat:@"%@ auth info --keychain-passphrase IPARanger --format json", kIpatoolScriptPath];
+    NSDictionary *authInfo = [IPARUtils executeCommandAndGetJSON:kLaunchPathBash arg1:kBashCommandKey arg2:commandToExecute arg3:nil accountId:self.loginAccountId];
+    NSString *email = self.emailTextField.text;
+    NSString *authName = authNameFromOutput;
+    if ([authInfo[kJsonKeySuccess] boolValue] == YES) {
+        email = authInfo[@"email"] ?: authInfo[@"account"][@"email"] ?: email;
+        authName = authInfo[@"name"] ?: authInfo[@"account"][@"name"] ?: authNameFromOutput;
+    }
+    [IPARUtils addOrUpdateAccountWithEmail:email authName:authName storefront:kDefaultInitialCountry accountId:self.loginAccountId];
 }
 
 - (void)setTabNavigation {

@@ -88,6 +88,13 @@
         [self.baseView addSubview:self.appSize];
         [self.appSize top:self.appFilename.bottomAnchor padding:0];
         [self.appSize leading:self.appImage.trailingAnchor padding:15];  
+        self.appSize.translatesAutoresizingMaskIntoConstraints = NO;
+        [self.baseView addConstraints:@[
+            [self.baseView.trailingAnchor constraintGreaterThanOrEqualToAnchor:self.appSize.trailingAnchor constant:10],
+            [self.baseView.bottomAnchor constraintGreaterThanOrEqualToAnchor:self.appSize.bottomAnchor constant:10]
+        ]];
+        self.appSize.adjustsFontSizeToFitWidth = YES;
+        self.appSize.minimumScaleFactor = 0.3;
 
     }
     

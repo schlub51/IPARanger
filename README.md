@@ -1,32 +1,69 @@
-# IPARanger
-Download any IPA from the appstore (encrypted) using your apple ID account!
+# IPARanger Experimental Fork
 
-This app is meant for jailbroken devices, but may support non-jailbroken devices in the future.
+This is an unofficial experimental fork of [0xkuj/IPARanger](https://github.com/0xkuj/IPARanger).
 
-# Instructions
-  * Install dependencies (gawk, unzip, appsync unified) as these are required to run some commands / install the IPAs you download
-  * Install the deb file containing the package either from packages directory or from havoc repository.
-  
+I made these changes mostly for personal use and experimentation. If they help someone else, great. If not, no worries. This is not intended to replace the original project or take credit for it.
 
-# Usage 
-This app consists mainly 4 screens.
-Login - Where you will input your Apple ID and Apple ID password:
-<img src="https://user-images.githubusercontent.com/56236821/228067107-e19bb1e5-3a7d-4ef9-bff4-a552bfbedf7d.png" width="400" height="850">
+The original app downloads encrypted IPA files from the App Store using an Apple ID account, through [majd/ipatool](https://github.com/majd/ipatool).
 
-Search Screen - Where you will define the country you want to search apps in the Appstore
-<img src="https://user-images.githubusercontent.com/56236821/228067086-f709655d-7b7c-456a-9596-01dba19c39e5.png" width="400" height="850">
+## What changed in this fork
 
+- Added multi-account support.
+- Isolated each account's `ipatool` keychain service to avoid login/token conflicts.
+- Added version selection before downloading an app.
+- Added release dates in the version picker when available.
+- Added a fallback to download the latest version when version history is unavailable.
+- Added minimum iOS version metadata for downloaded IPAs.
+- Added account attribution for downloaded IPAs.
+- Made downloads less blocking with an in-app download banner.
+- Adjusted downloaded IPA metadata text so it fits better on small screens.
+- Kept the existing install/share/download flow as close to the original app as possible.
 
-Download Screen - Where you will handle - delete/rename/share/install your donwloaded IPAs
-<img src="https://user-images.githubusercontent.com/56236821/228067124-f65b158e-c17d-4459-b529-99582a05fe8b.png" width="400" height="850">
+## Notes
 
+This fork was built through experimentation and testing on my own setup. It may have rough edges, and I cannot guarantee that every feature works on every jailbreak, rootless, or TrollStore configuration.
 
-Account Screen - Where you can see details such as last login date, your name and your email of the account that is connected to the app
+Downloaded IPAs are still encrypted when they come from the App Store. TrollStore cannot install encrypted main binaries directly; that is separate from IPARanger's download flow.
 
-<img src="https://user-images.githubusercontent.com/56236821/228067467-e3bd91fc-9ac9-47d0-b82c-afefeb2fc571.jpg" width="400" height="850">
+## ipatool patch
 
-# Support
-  * Jailbroken devices running iOS 13.4 - iOS 16 (?) (without Xina15 jailbreak included)
-  
-# Credits
-Thanks to @majd's ipatool
+This fork embeds a patched `ipatool` binary.
+
+The patch is included in [`patches/ipatool-keychain-service.patch`](patches/ipatool-keychain-service.patch). In short:
+
+- `ipatool` can read `IPATOOL_KEYCHAIN_SERVICE` from the environment.
+- IPARanger sets a different keychain service per account.
+- This avoids multiple Apple ID accounts fighting over the same system keychain slot.
+- `keychain.Set` removes the old item before saving a new one, which avoids an iOS keychain update failure seen during testing.
+
+## Build notes
+
+This project uses Theos.
+
+Example rootless build:
+
+```sh
+THEOS_PACKAGE_SCHEME=rootless make package FINALPACKAGE=1
+```
+
+Depending on your local Xcode/iOS SDK setup, you may need to adjust the `TARGET` line in the `Makefile`.
+
+Generated `.deb` packages are intentionally not tracked in this source tree. If I publish builds, they should live under GitHub Releases instead.
+
+## Original project information
+
+From the original README:
+
+- IPARanger is a GUI based application for `ipatool`.
+- It was made for jailbroken devices.
+- Original support notes mentioned jailbroken devices running iOS 13.4 to iOS 16, excluding Xina15.
+
+## Credits
+
+- Original app: [0xkuj/IPARanger](https://github.com/0xkuj/IPARanger)
+- ipatool: [majd/ipatool](https://github.com/majd/ipatool)
+- Changes in this fork were vibe-coded with Codex.
+
+## License
+
+This project keeps the original MIT license from IPARanger.
