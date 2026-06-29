@@ -19,6 +19,19 @@ The original app downloads encrypted IPA files from the App Store using an Apple
 - Adjusted downloaded IPA metadata text so it fits better on small screens.
 - Kept the existing install/share/download flow as close to the original app as possible.
 
+## Screenshots
+
+<p>
+  <img src="docs/screenshots/search-download-action.png" alt="Search result download action" width="240">
+  <img src="docs/screenshots/version-picker.png" alt="Version picker with release dates" width="240">
+  <img src="docs/screenshots/download-progress-banner.png" alt="Non-blocking download progress banner" width="240">
+</p>
+
+<p>
+  <img src="docs/screenshots/downloads-account-metadata.png" alt="Downloads page with account and iOS metadata" width="240">
+  <img src="docs/screenshots/accounts-switcher.png" alt="Multi-account switcher" width="240">
+</p>
+
 ## Notes
 
 This fork was built through experimentation and testing on my own setup. It may have rough edges, and I cannot guarantee that every feature works on every jailbreak, rootless, or TrollStore configuration.
