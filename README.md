@@ -59,11 +59,19 @@ The patch is included in [`patches/ipatool-keychain-service.patch`](patches/ipat
 
 This project uses Theos.
 
-Example rootless build:
+Rootless build:
 
 ```sh
 THEOS_PACKAGE_SCHEME=rootless make package FINALPACKAGE=1
 ```
+
+Rootful build:
+
+```sh
+make package FINALPACKAGE=1
+```
+
+Install the package that matches your jailbreak environment. A rootless package is not expected to work correctly on a rootful jailbreak, and a rootful package is not expected to work correctly on a rootless jailbreak.
 
 Depending on your local Xcode/iOS SDK setup, you may need to adjust the `TARGET` line in the `Makefile`.
 
