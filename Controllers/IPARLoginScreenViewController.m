@@ -162,7 +162,7 @@
     self.emailTextField.delegate = self;
     self.passwordTextField.delegate = self;
     self.loginButton = [self setLoginButtonPrefsWithFrame:CGRectMake(65, 420, self.view.frame.size.width - 130, 40) title:kLoginTitle];
-    self.downloadsButton = [self setDownloadsButtonPrefsWithFrame:CGRectMake(65, 470, self.view.frame.size.width - 130, 38)];
+    self.downloadsButton = [self setDownloadsButtonPrefsWithFrame:CGRectMake(65, 490, self.view.frame.size.width - 130, 38)];
     [self configureEyeButton];
     [self.view addSubview:self.emailTextField];
     [self.view addSubview:self.passwordTextField];
