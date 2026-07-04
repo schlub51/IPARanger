@@ -12,14 +12,17 @@
 - Minimum iOS version extraction from downloaded IPA metadata.
 - Account attribution for downloaded IPAs.
 - Non-blocking download banner.
+- iOS 13 fallback for the Downloads menu on rootful builds.
 
 ### Changed
 
 - Downloaded IPA metadata is fitted to the available cell width.
 - Download list refresh keeps the original storage location instead of moving downloaded IPAs into account-specific folders.
 - Logout wording was adjusted to avoid the scary "delete account" phrasing while still revoking the local token for the active account.
+- Rootful post-install setup now creates the cache folders used by the Downloads page.
 
 ### Notes
 
 - The embedded `ipatool` binary is patched. See [`patches/ipatool-keychain-service.patch`](patches/ipatool-keychain-service.patch).
 - Downloaded App Store IPAs remain encrypted.
+- Limited rootful testing was done on iOS 13.5; other rootful/rootless setups may still behave differently.

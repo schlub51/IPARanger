@@ -8,7 +8,7 @@ The original app downloads encrypted IPA files from the App Store using an Apple
 
 ## Compatibility / support disclaimer
 
-This fork was tested on my own device and setup only. I used it on a rootless jailbreak environment (Dopamine, iOS 16.4), and I cannot guarantee that it will behave the same way on other iOS versions, other jailbreaks, or rootful setups.
+This fork was tested on my own devices and setup only. I used it mainly on a rootless jailbreak environment (Dopamine, iOS 16.4), with limited rootful testing on iOS 13.5. I cannot guarantee that it will behave the same way on other iOS versions, other jailbreaks, or rootful setups.
 
 Some parts may fail, behave differently, or crash entirely depending on your environment. This is shared as an experimental fork, not as a polished or officially supported release.
 
@@ -25,6 +25,7 @@ If it works for you, nice. If it does not, please assume rough edges are expecte
 - Added account attribution for downloaded IPAs.
 - Made downloads less blocking with an in-app download banner.
 - Adjusted downloaded IPA metadata text so it fits better on small screens.
+- Added an iOS 13-compatible fallback for the Downloads menu used by rootful builds.
 - Kept the existing install/share/download flow as close to the original app as possible.
 
 ## Screenshots
@@ -73,7 +74,7 @@ make package FINALPACKAGE=1
 
 Install the package that matches your jailbreak environment. A rootless package is not expected to work correctly on a rootful jailbreak, and a rootful package is not expected to work correctly on a rootless jailbreak.
 
-Depending on your local Xcode/iOS SDK setup, you may need to adjust the `TARGET` line in the `Makefile`.
+Depending on your local Xcode/iOS SDK setup, you may need to adjust the `TARGET` line in the `Makefile`. For older rootful devices, the app has been built with `TARGET=iphone:clang:latest:13.0` during testing.
 
 Generated `.deb` packages are intentionally not tracked in this source tree. If I publish builds, they should live under GitHub Releases instead.
 

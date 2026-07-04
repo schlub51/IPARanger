@@ -14,8 +14,10 @@ if [ -d $FILES_DIR ]; then
     echo "$FILES_DIR Already exists!"
 else
     echo "$FILES_DIR Does not exists, Creating directory.."
-    mkdir $FILES_DIR
+    mkdir -p $FILES_DIR
 fi
+
+mkdir -p "${FILES_DIR}/cacheDir/TEMP"
 
 echo "Settings up permissions to the main files directory..."
 chown -R 501:501 $FILES_DIR

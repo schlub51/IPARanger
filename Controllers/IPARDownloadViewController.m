@@ -78,6 +78,8 @@
             NSLog(@"Error creating directory: %@", error.localizedDescription);
         }
     }
+    [self createDirectoryIfNeeded:kIPARangerCacheDirPath];
+    [self createDirectoryIfNeeded:kIPARangerCacheDirTempPath];
     [self setupTableviewPropsAndBackground];
     [self setupProgressViewCenter];
     //deprecated
@@ -243,30 +245,19 @@
 }
 
 - (void)setupDownloadsMenu {
+    if (@available(iOS 14.0, *)) {
     UIAction *openInFilzaAction = [UIAction actionWithTitle:@"Open Download Folder in Filza" 
                                                       image:[UIImage systemImageNamed:kFolderIcon] 
                                                  identifier:nil 
                                                     handler:^(__kindof UIAction * _Nonnull action) {
-        [self openInFilza:kIPARangerDocumentsPath];
+        [self openDownloadFolderInFilza];
     }];
     
     UIAction *deleteCacheAction = [UIAction actionWithTitle:@"Delete Cache Folder" 
                                                       image:[UIImage systemImageNamed:kTrashIcon] 
                                                  identifier:nil 
                                                     handler:^(__kindof UIAction * _Nonnull action) {
-                                                        
-        unsigned long long cacheFolderSize = [IPARUtils calculateFolderSize:kIPARangerCacheDirPath];
-        NSString *folderSizeString = [IPARUtils humanReadableSizeForBytes:cacheFolderSize];
-        AlertActionBlock alertBlockConfirm = ^(void) {
-                NSFileManager *fileManager = [NSFileManager defaultManager];
-                NSError *error;
-                [fileManager removeItemAtPath:kIPARangerCacheDirPath error:nil];
-        };
-        
-        [self dismissViewControllerAnimated:YES completion:^{
-            [IPARUtils presentDialogWithTitle:kIPARangerWarningHeadline message:[NSString stringWithFormat:@"The cache folder contains cached information about your previously downloaded apps.\nYour downloaded app will still exists.\n\nCache folder size: %@\n\nAre you sure?", folderSizeString] hasTextfield:NO withTextfieldBlock:nil
-                    alertConfirmationBlock:nil withConfirmText:@"No" alertCancelBlock:alertBlockConfirm withCancelText:@"Yes" presentOn:self];
-        }]; 
+        [self confirmDeleteCacheFolder];
     }];
     
     deleteCacheAction.attributes = UIMenuElementAttributesDestructive;
@@ -281,6 +272,48 @@
                                                                    menu:menu];
     
     self.navigationItem.leftBarButtonItem = menuButton;
+    } else {
+        UIBarButtonItem *menuButton = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:kMenuIcon]
+                                                                       style:UIBarButtonItemStylePlain
+                                                                      target:self
+                                                                      action:@selector(showLegacyDownloadsMenu)];
+        self.navigationItem.leftBarButtonItem = menuButton;
+    }
+}
+
+- (void)showLegacyDownloadsMenu {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:nil message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    UIAlertAction *openInFilzaAction = [UIAlertAction actionWithTitle:@"Open Download Folder in Filza" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        [self openDownloadFolderInFilza];
+    }];
+    UIAlertAction *deleteCacheAction = [UIAlertAction actionWithTitle:@"Delete Cache Folder" style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
+        [self confirmDeleteCacheFolder];
+    }];
+    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil];
+    [alert addAction:openInFilzaAction];
+    [alert addAction:deleteCacheAction];
+    [alert addAction:cancelAction];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)openDownloadFolderInFilza {
+    [self openInFilza:kIPARangerDocumentsPath];
+}
+
+- (void)confirmDeleteCacheFolder {
+    unsigned long long cacheFolderSize = [IPARUtils calculateFolderSize:kIPARangerCacheDirPath];
+    NSString *folderSizeString = [IPARUtils humanReadableSizeForBytes:cacheFolderSize];
+    AlertActionBlock alertBlockConfirm = ^(void) {
+        NSFileManager *fileManager = [NSFileManager defaultManager];
+        [fileManager removeItemAtPath:kIPARangerCacheDirPath error:nil];
+        [self createDirectoryIfNeeded:kIPARangerCacheDirPath];
+        [self createDirectoryIfNeeded:kIPARangerCacheDirTempPath];
+    };
+    
+    [self dismissViewControllerAnimated:YES completion:^{
+        [IPARUtils presentDialogWithTitle:kIPARangerWarningHeadline message:[NSString stringWithFormat:@"The cache folder contains cached information about your previously downloaded apps.\nYour downloaded app will still exists.\n\nCache folder size: %@\n\nAre you sure?", folderSizeString] hasTextfield:NO withTextfieldBlock:nil
+                alertConfirmationBlock:nil withConfirmText:@"No" alertCancelBlock:alertBlockConfirm withCancelText:@"Yes" presentOn:self];
+    }];
 }
 - (void)deleteAllButtonTapped {
     if ([self.existingApps count] <= 0) {
