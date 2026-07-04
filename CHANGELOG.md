@@ -2,6 +2,8 @@
 
 ## Experimental fork
 
+Version label: `2.3.0+exp1`, based on upstream IPARanger 2.3.0.
+
 ### Added
 
 - Multi-account support.

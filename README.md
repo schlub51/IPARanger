@@ -16,6 +16,8 @@ If it works for you, nice. If it does not, please assume rough edges are expecte
 
 ## What changed in this fork
 
+This fork is versioned as `2.3.0+exp1`: it is based on IPARanger 2.3.0, with experimental changes on top.
+
 - Added multi-account support.
 - Isolated each account's `ipatool` keychain service to avoid login/token conflicts.
 - Added version selection before downloading an app.
@@ -48,6 +50,8 @@ Downloaded IPAs are still encrypted when they come from the App Store. TrollStor
 ## ipatool patch
 
 This fork embeds a patched `ipatool` binary.
+
+The embedded binary is a custom patched iOS build. It may report itself as a development build; the important part for this fork is the patch behavior, not the upstream CLI version string.
 
 The patch is included in [`patches/ipatool-keychain-service.patch`](patches/ipatool-keychain-service.patch). In short:
 
