@@ -9,6 +9,7 @@
 @property (nonatomic) IBOutlet UITextField *emailTextField;
 @property (nonatomic) IBOutlet UITextField *passwordTextField;
 @property (nonatomic) UIButton *loginButton;
+@property (nonatomic) UIButton *downloadsButton;
 @property (nonatomic) UIButton *eyeButton;
 @property (nonatomic) NSDictionary *lastCommandResult;
 @property (nonatomic) UILabel *underLabel;
@@ -161,10 +162,12 @@
     self.emailTextField.delegate = self;
     self.passwordTextField.delegate = self;
     self.loginButton = [self setLoginButtonPrefsWithFrame:CGRectMake(65, 420, self.view.frame.size.width - 130, 40) title:kLoginTitle];
+    self.downloadsButton = [self setDownloadsButtonPrefsWithFrame:CGRectMake(65, 470, self.view.frame.size.width - 130, 38)];
     [self configureEyeButton];
     [self.view addSubview:self.emailTextField];
     [self.view addSubview:self.passwordTextField];
     [self.view addSubview:self.loginButton];
+    [self.view addSubview:self.downloadsButton];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillShow:) name:UIKeyboardWillShowNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
 }
@@ -212,6 +215,32 @@
     loginButton.frame = frame;
     [loginButton addTarget:self action:@selector(handleLoginEmailPass) forControlEvents:UIControlEventTouchUpInside];
     return loginButton;
+}
+
+- (UIButton *)setDownloadsButtonPrefsWithFrame:(CGRect)frame {
+    UIButton *downloadsButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [downloadsButton setTitle:@"Open Downloads Folder" forState:UIControlStateNormal];
+    [downloadsButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    downloadsButton.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
+    downloadsButton.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.16];
+    downloadsButton.layer.cornerRadius = 10;
+    downloadsButton.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.22].CGColor;
+    downloadsButton.layer.borderWidth = 1.0;
+    downloadsButton.frame = frame;
+    [downloadsButton addTarget:self action:@selector(openDownloadsFolder) forControlEvents:UIControlEventTouchUpInside];
+    return downloadsButton;
+}
+
+- (void)openDownloadsFolder {
+    NSString *filzaURLString = [NSString stringWithFormat:@"%@%@", kFilzaScheme, kIPARangerDocumentsPath];
+    NSURL *url = [NSURL URLWithString:filzaURLString];
+    [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:^(BOOL success) {
+        if (!success) {
+            [UIPasteboard generalPasteboard].string = kIPARangerDocumentsPath;
+            [IPARUtils presentDialogWithTitle:kIPARangerWarningHeadline message:[NSString stringWithFormat:@"Could not open Filza.\n\nThe downloads path was copied:\n%@", kIPARangerDocumentsPath] hasTextfield:NO withTextfieldBlock:nil
+                            alertConfirmationBlock:nil withConfirmText:@"OK" alertCancelBlock:nil withCancelText:nil presentOn:self];
+        }
+    }];
 }
 
 - (UITextField *)setTextFieldsViewWithFrame:(CGRect)frame title:(NSString *)title {
