@@ -20,6 +20,7 @@ This fork is versioned as `2.3.0+exp1`: it is based on IPARanger 2.3.0, with exp
 
 - Added multi-account support.
 - Isolated each account's `ipatool` keychain service to avoid login/token conflicts.
+- Patched the embedded `ipatool` auth/keychain behavior used by this fork.
 - Added version selection before downloading an app.
 - Added release dates in the version picker when available.
 - Added a fallback to download the latest version when version history is unavailable.
@@ -27,7 +28,8 @@ This fork is versioned as `2.3.0+exp1`: it is based on IPARanger 2.3.0, with exp
 - Added account attribution for downloaded IPAs.
 - Made downloads less blocking with an in-app download banner.
 - Adjusted downloaded IPA metadata text so it fits better on small screens.
-- Added an iOS 13-compatible fallback for the Downloads menu used by rootful builds.
+- Added a login-screen shortcut to open the local downloads folder even when Apple ID auth is broken.
+- Tested both rootless and rootful builds during development.
 - Kept the existing install/share/download flow as close to the original app as possible.
 
 ## Screenshots
@@ -59,6 +61,7 @@ The patch is included in [`patches/ipatool-keychain-service.patch`](patches/ipat
 - IPARanger sets a different keychain service per account.
 - This avoids multiple Apple ID accounts fighting over the same system keychain slot.
 - `keychain.Set` removes the old item before saving a new one, which avoids an iOS keychain update failure seen during testing.
+- The goal is to reduce the recurring auth/login failures that can surface in IPARanger as JSON parsing errors when Apple or `ipatool` behavior changes.
 
 ## Build notes
 
