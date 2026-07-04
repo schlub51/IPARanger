@@ -315,6 +315,9 @@
     label.text = text;
     label.font = [UIFont systemFontOfSize:fontSize weight:UIFontWeightSemibold];
     label.translatesAutoresizingMaskIntoConstraints = NO;
+    label.adjustsFontSizeToFitWidth = YES;
+    label.minimumScaleFactor = 0.55;
+    label.numberOfLines = 1;
     return label;
 }
 

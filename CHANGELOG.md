@@ -22,6 +22,7 @@ Version label: `2.3.0+exp1`, based on upstream IPARanger 2.3.0.
 - Download list refresh keeps the original storage location instead of moving downloaded IPAs into account-specific folders.
 - Logout wording was adjusted to avoid the scary "delete account" phrasing while still revoking the local token for the active account.
 - Rootful post-install setup now creates the cache folders used by the Downloads page.
+- Card styling is used consistently for version selection and has better dark-mode contrast.
 
 ### Notes
 

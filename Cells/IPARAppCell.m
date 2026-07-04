@@ -1,5 +1,14 @@
 #import "IPARAppCell.h"
 
+static UIColor *IPARCardBackgroundColor(void) {
+    return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traitCollection) {
+        if (traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) {
+            return [UIColor colorWithWhite:0.14 alpha:1.0];
+        }
+        return UIColor.secondarySystemBackgroundColor;
+    }];
+}
+
 @implementation IPARAppCell
 
 -(id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
@@ -8,7 +17,7 @@
     
     if (self) {
         self.baseView = [[UIView alloc] init];
-        self.baseView.backgroundColor = UIColor.secondarySystemBackgroundColor;
+        self.baseView.backgroundColor = IPARCardBackgroundColor();
         self.baseView.clipsToBounds = YES;
         self.baseView.layer.cornerRadius = 12;
         self.baseView.layer.cornerCurve = kCACornerCurveContinuous;

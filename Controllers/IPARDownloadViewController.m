@@ -13,6 +13,15 @@
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #pragma clang diagnostic ignored "-Wformat-extra-args"
 
+static UIColor *IPARCardBackgroundColor(void) {
+    return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traitCollection) {
+        if (traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) {
+            return [UIColor colorWithWhite:0.14 alpha:1.0];
+        }
+        return UIColor.secondarySystemBackgroundColor;
+    }];
+}
+
 @interface IPARDownloadViewController () 
 @property (nonatomic, strong) NSMutableArray *existingApps;
 @property (nonatomic) UIProgressView *progressView;
@@ -120,7 +129,7 @@
 
     UIView *banner = [[UIView alloc] initWithFrame:CGRectZero];
     banner.translatesAutoresizingMaskIntoConstraints = NO;
-    banner.backgroundColor = UIColor.secondarySystemBackgroundColor;
+    banner.backgroundColor = IPARCardBackgroundColor();
     banner.layer.cornerRadius = 12;
     banner.layer.cornerCurve = kCACornerCurveContinuous;
     [container addSubview:banner];
@@ -822,7 +831,7 @@
         NSString *percentage = [fileContents substringWithRange:percentageRange];
         dispatch_async(dispatch_get_main_queue(), ^{
             self.currentPrecentageDownload = percentage;
-            self.downloadStatusLabel.text = [NSString stringWithFormat:@"Downloading %@ · %@%%", self.lastBundleDownload, percentage];
+            self.downloadStatusLabel.text = [NSString stringWithFormat:@"Downloading · %@%%", percentage];
             [self.progressView setProgress:[percentage floatValue] / 100];
         });
     }
@@ -1097,7 +1106,7 @@
 }
 
 - (void)showDownloadDialog {
-    self.downloadStatusLabel.text = [NSString stringWithFormat:@"Downloading %@ · 0%%", self.lastBundleDownload];
+    self.downloadStatusLabel.text = @"Downloading · 0%";
     self.tableView.tableHeaderView = self.downloadBannerView;
 }
 

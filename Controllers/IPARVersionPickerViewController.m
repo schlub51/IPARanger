@@ -1,4 +1,5 @@
 #import "IPARVersionPickerViewController.h"
+#import "../Cells/IPARVersionCell.h"
 
 @interface IPARVersionPickerViewController ()
 @property (nonatomic, strong) NSArray *versions;
@@ -8,7 +9,7 @@
 @implementation IPARVersionPickerViewController
 
 - (instancetype)initWithVersions:(NSArray *)versions completion:(IPARVersionPickerCompletion)completion {
-    self = [super initWithStyle:UITableViewStyleInsetGrouped];
+    self = [super initWithStyle:UITableViewStylePlain];
     if (self) {
         _versions = versions ?: @[];
         _completion = [completion copy];
@@ -20,6 +21,9 @@
     [super viewDidLoad];
     self.title = @"Select Version";
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(cancelTapped)];
+    self.tableView.backgroundColor = UIColor.systemBackgroundColor;
+    self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+    [self.tableView registerClass:[IPARVersionCell class] forCellReuseIdentifier:@"VersionCell"];
 }
 
 - (void)cancelTapped {
@@ -35,21 +39,19 @@
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"VersionCell"];
-    if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"VersionCell"];
-    }
-    cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    cell.textLabel.font = [UIFont monospacedDigitSystemFontOfSize:15 weight:UIFontWeightRegular];
-    cell.detailTextLabel.text = nil;
+    IPARVersionCell *cell = [tableView dequeueReusableCellWithIdentifier:@"VersionCell" forIndexPath:indexPath];
     if (indexPath.row == 0) {
-        cell.textLabel.text = @"Latest version";
+        [cell configureWithVersion:@"Latest version" detail:@"Current App Store version"];
     } else {
         NSDictionary *version = self.versions[indexPath.row - 1];
-        cell.textLabel.text = [NSString stringWithFormat:@"%@", version[@"bundle_version"] ?: @"Unknown version"];
-        cell.detailTextLabel.text = [self detailTextForVersion:version];
+        NSString *versionText = [NSString stringWithFormat:@"%@", version[@"bundle_version"] ?: @"Unknown version"];
+        [cell configureWithVersion:versionText detail:[self detailTextForVersion:version]];
     }
     return cell;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    return 70.0;
 }
 
 - (NSString *)detailTextForVersion:(NSDictionary *)version {
