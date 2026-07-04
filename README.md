@@ -14,6 +14,15 @@ Some parts may fail, behave differently, or crash entirely depending on your env
 
 If it works for you, nice. If it does not, please assume rough edges are expected.
 
+## Downloads
+
+Prebuilt experimental `.deb` packages are available under [GitHub Releases](https://github.com/schlub51/IPARanger/releases/tag/v2.3.0-exp1).
+
+Pick the package that matches your jailbreak setup:
+
+- Rootless / Dopamine: `IPARanger_2.3.0+exp1_rootless-dopamine_downloads-folder-spacing.deb`
+- Rootful / iOS 13-compatible: `IPARanger_2.3.0+exp1_rootful-ios13compat_downloads-folder-spacing.deb`
+
 ## What changed in this fork
 
 This fork is versioned as `2.3.0+exp1`: it is based on IPARanger 2.3.0, with experimental changes on top.
